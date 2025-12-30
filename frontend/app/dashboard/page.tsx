@@ -1,3 +1,6 @@
+'use client';
+
+import ProtectedRoute from '@/components/Auth/ProtectedRoute';
 import StatsCard from '@/components/Cards/StatsCard';
 import {
   Package,
@@ -9,6 +12,8 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -112,6 +117,7 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }
 

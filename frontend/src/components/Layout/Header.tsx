@@ -1,8 +1,28 @@
 'use client';
 
 import { Bell, Search, User, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function Header() {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
       <div className="flex h-16 items-center justify-between px-6">
@@ -29,13 +49,21 @@ export default function Header() {
           {/* User menu */}
           <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-900">Admin User</p>
-              <p className="text-xs text-gray-500">admin@clothshop.com</p>
+              <p className="text-sm font-medium text-gray-900">
+                {user?.full_name || user?.username || 'User'}
+              </p>
+              <p className="text-xs text-gray-500 capitalize">
+                {user?.role?.name?.replace('_', ' ') || 'Role'}
+              </p>
             </div>
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md hover:shadow-lg transition-shadow cursor-pointer">
-              <User className="h-4 w-4 text-white" />
+            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md hover:shadow-lg transition-shadow cursor-pointer text-white text-xs font-semibold">
+              {getInitials(user?.full_name || user?.username)}
             </div>
-            <button className="rounded-lg p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors">
+            <button
+              onClick={handleLogout}
+              className="rounded-lg p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+              title="Logout"
+            >
               <LogOut className="h-5 w-5" />
             </button>
           </div>

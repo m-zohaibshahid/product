@@ -21,17 +21,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard)
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  @Post()
-  @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
-  create(@Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(createProductDto);
-  }
-
+  // Public endpoints - Anyone can browse products
   @Get()
   findAll() {
     return this.productsService.findAll();
@@ -40,6 +33,19 @@ export class ProductsController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.findOne(id);
+  }
+
+  @Get(':id/images')
+  async getProductImages(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.getProductImages(id);
+  }
+
+  // Protected endpoints - Staff only
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'manager')
+  create(@Body() createProductDto: CreateProductDto) {
+    return this.productsService.create(createProductDto);
   }
 
   @Patch(':id')
@@ -60,7 +66,7 @@ export class ProductsController {
   }
 
   @Post(':id/images')
-  @UseGuards(RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'manager')
   @UseInterceptors(FilesInterceptor('images', 10)) // Max 10 images
   async uploadImages(
@@ -69,11 +75,6 @@ export class ProductsController {
     @GetUser() user: any,
   ) {
     return this.productsService.addImages(id, files, user.user_id);
-  }
-
-  @Get(':id/images')
-  async getProductImages(@Param('id', ParseIntPipe) id: number) {
-    return this.productsService.getProductImages(id);
   }
 }
 

@@ -1,13 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Save, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { brandsApi, categoriesApi, productsApi } from '@/lib/api';
+import type { Brand, Category } from '@/types';
 
 export default function NewProductPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [formData, setFormData] = useState({
     article_code: '',
     name: '',
@@ -19,22 +26,96 @@ export default function NewProductPage() {
     status: 'active',
   });
 
+  const fetchData = async () => {
+    try {
+      setLoadingData(true);
+      const [brandsRes, categoriesRes] = await Promise.all([
+        brandsApi.getAll(),
+        categoriesApi.getAll(),
+      ]);
+      setBrands(brandsRes.data);
+      // Fetch categories with subcategories if available
+      const categoriesData = categoriesRes.data;
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error fetching brands/categories:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Refresh data when returning from add brand/category page
+  useEffect(() => {
+    if (searchParams.get('refresh') === 'true') {
+      fetchData();
+      // Remove the refresh parameter from URL
+      router.replace('/products/new', { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  // Fetch subcategories when category changes
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (formData.category_id) {
+        try {
+          const categoryId = parseInt(formData.category_id);
+          const category = categories.find(c => c.category_id === categoryId);
+          
+          // Check if category has subcategories property (from API response)
+          if (category && (category as any).subcategories) {
+            setSubcategories((category as any).subcategories || []);
+          } else {
+            // If subcategories not in response, try fetching category details
+            try {
+              const categoryRes = await categoriesApi.getById(categoryId);
+              if (categoryRes.data && (categoryRes.data as any).subcategories) {
+                setSubcategories((categoryRes.data as any).subcategories || []);
+              } else {
+                setSubcategories([]);
+              }
+            } catch (err) {
+              // If category details don't include subcategories, set empty
+              setSubcategories([]);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching subcategories:', error);
+          setSubcategories([]);
+        }
+      } else {
+        setSubcategories([]);
+        setFormData(prev => ({ ...prev, subcategory_id: '' }));
+      }
+    };
+
+    fetchSubcategories();
+  }, [formData.category_id, categories]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await productsApi.create(formData);
-      console.log('Product data:', formData);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      const productData = {
+        ...formData,
+        brand_id: parseInt(formData.brand_id),
+        category_id: parseInt(formData.category_id),
+        subcategory_id: formData.subcategory_id ? parseInt(formData.subcategory_id) : undefined,
+        default_tax_rate: parseFloat(formData.default_tax_rate.toString()) || 0,
+      };
+
+      await productsApi.create(productData);
       router.push('/products');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating product:', error);
-      alert('Failed to create product. Please try again.');
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          'Failed to create product. Please try again.';
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -125,9 +206,18 @@ export default function NewProductPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Category & Brand</h2>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <div>
-                <label htmlFor="brand_id" className="block text-sm font-medium text-gray-700 mb-2">
-                  Brand <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="brand_id" className="block text-sm font-medium text-gray-700">
+                    Brand <span className="text-red-500">*</span>
+                  </label>
+                  <Link
+                    href="/brands/new"
+                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Brand
+                  </Link>
+                </div>
                 <select
                   id="brand_id"
                   name="brand_id"
@@ -135,18 +225,32 @@ export default function NewProductPage() {
                   value={formData.brand_id}
                   onChange={handleChange}
                   className="input"
+                  disabled={loadingData}
                 >
-                  <option value="">Select Brand</option>
-                  <option value="1">Arrow</option>
-                  <option value="2">Zara</option>
-                  <option value="3">H&M</option>
+                  <option value="">{loadingData ? 'Loading...' : 'Select Brand'}</option>
+                  {brands
+                    .filter(brand => brand.status === 'active')
+                    .map((brand) => (
+                      <option key={brand.brand_id} value={brand.brand_id}>
+                        {brand.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
               <div>
-                <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-2">
-                  Category <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="category_id" className="block text-sm font-medium text-gray-700">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <Link
+                    href="/categories/new"
+                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Category
+                  </Link>
+                </div>
                 <select
                   id="category_id"
                   name="category_id"
@@ -154,11 +258,14 @@ export default function NewProductPage() {
                   value={formData.category_id}
                   onChange={handleChange}
                   className="input"
+                  disabled={loadingData}
                 >
-                  <option value="">Select Category</option>
-                  <option value="1">Men</option>
-                  <option value="2">Women</option>
-                  <option value="3">Kids</option>
+                  <option value="">{loadingData ? 'Loading...' : 'Select Category'}</option>
+                  {categories.map((category) => (
+                    <option key={category.category_id} value={category.category_id}>
+                      {category.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -172,11 +279,20 @@ export default function NewProductPage() {
                   value={formData.subcategory_id}
                   onChange={handleChange}
                   className="input"
+                  disabled={!formData.category_id || loadingData}
                 >
-                  <option value="">Select Subcategory</option>
-                  <option value="1">Shirts</option>
-                  <option value="2">Trousers</option>
-                  <option value="3">T-Shirts</option>
+                  <option value="">
+                    {!formData.category_id 
+                      ? 'Select category first' 
+                      : subcategories.length === 0 
+                        ? 'No subcategories' 
+                        : 'Select Subcategory'}
+                  </option>
+                  {subcategories.map((subcategory) => (
+                    <option key={subcategory.subcategory_id} value={subcategory.subcategory_id}>
+                      {subcategory.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
