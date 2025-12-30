@@ -120,3 +120,4 @@ export const locationsApi = {
 
 export default api;
 
+

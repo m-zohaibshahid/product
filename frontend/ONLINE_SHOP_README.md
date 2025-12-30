@@ -204,3 +204,4 @@ NEXT_PUBLIC_API_URL=http://localhost:5500
 
 This completes the online shop frontend! 🎉
 
+

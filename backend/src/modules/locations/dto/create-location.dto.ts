@@ -18,3 +18,4 @@ export class CreateLocationDto {
   status?: 'active' | 'inactive';
 }
 
+
