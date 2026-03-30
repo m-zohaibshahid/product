@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Image } from '../../entities/image.entity';
+import { Image } from '../entities/image.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 

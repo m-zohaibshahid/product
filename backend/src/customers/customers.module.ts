@@ -7,7 +7,7 @@ import { CustomersController } from './customers.controller';
 import { CustomersService } from './customers.service';
 import { CustomersAuthService } from './customers-auth.service';
 import { CustomerJwtStrategy } from './strategies/customer-jwt.strategy';
-import { Customer } from '../../entities/customer.entity';
+import { Customer } from '../entities/customer.entity';
 
 @Module({
   imports: [

@@ -9,15 +9,12 @@ import {
   ParseIntPipe,
   ForbiddenException,
 } from '@nestjs/common';
-import { OrdersService } from './orders.service';
-import { CreateOrderDto } from './dto/create-order.dto';
-import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { OptionalJwtGuard } from '../sales/guards/optional-jwt.guard';
 import { CustomerOrStaffGuard } from '../customers/guards/customer-or-staff.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { GetRequestUser } from '../sales/decorators/get-request-user.decorator';
+import { CreateOrderDto, ConfirmOrderDto } from './dto/order.dto';
+import { OrdersService } from './orders.service';
 
 @Controller('orders')
 export class OrdersController {
@@ -50,10 +47,7 @@ export class OrdersController {
     @Body() confirmOrderDto: ConfirmOrderDto,
     @GetRequestUser() user: any,
   ) {
-    // Customers can only confirm their own orders
     if (user.type === 'customer') {
-      // Verify order belongs to customer
-      // This will be checked in service
     }
 
     return this.ordersService.confirmOrder(orderId, confirmOrderDto);
@@ -67,9 +61,7 @@ export class OrdersController {
     @Body() paymentData: any,
     @GetRequestUser() user: any,
   ) {
-    // Customers can only pay their own orders
     if (user.type === 'customer') {
-      // Verify order belongs to customer
     }
 
     return this.ordersService.processPayment(orderId, paymentData);

@@ -11,6 +11,7 @@ import { UpdateStockDto } from './dto/update-stock.dto';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { Stock } from 'src/entities/stock.entity';
 import { ProductVariant } from 'src/entities/product-variant.entity';
+import { Location } from 'src/entities/location.entity';
 
 @Injectable()
 export class StockService {

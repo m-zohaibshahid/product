@@ -18,10 +18,10 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { CustomerLoginDto } from './dto/customer-login.dto';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomerJwtGuard } from './guards/customer-jwt.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
-import { Roles } from '../../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { GetCustomer } from './decorators/get-customer.decorator';
 
 @Controller('customers')
