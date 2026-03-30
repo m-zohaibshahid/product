@@ -1,5 +1,6 @@
 import { IsString, IsNotEmpty, IsEmail, MinLength, IsOptional, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
 export class RegisterDto {
   @ApiProperty()
   @IsString()
@@ -7,16 +8,17 @@ export class RegisterDto {
   username: string;
 
   @ApiProperty()
-  @IsString()
+  @IsEmail({}, { message: 'Invalid email address' })
   @IsNotEmpty()
   email: string;
 
   @ApiProperty()
   @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters long' })
+  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  @IsNotEmpty()
   password: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   full_name?: string;
@@ -29,7 +31,7 @@ export class RegisterDto {
 
 export class VerifyOtpDto {
   @ApiProperty()
-  @IsString()
+  @IsEmail({}, { message: 'Invalid email address' })
   @IsNotEmpty()
   email: string;
 
@@ -47,13 +49,14 @@ export class ChangePasswordDto {
 
   @ApiProperty()
   @IsString()
+  @MinLength(8, { message: 'New password must be at least 8 characters' })
   @IsNotEmpty()
   newPassword: string;
 }
 
 export class ResetPasswordDto {
   @ApiProperty()
-  @IsString()
+  @IsEmail({}, { message: 'Invalid email address' })
   @IsNotEmpty()
   email: string;
 
@@ -64,7 +67,7 @@ export class ResetPasswordDto {
 
   @ApiProperty()
   @IsString()
+  @MinLength(8, { message: 'New password must be at least 8 characters' })
   @IsNotEmpty()
   password: string;
 }
-
