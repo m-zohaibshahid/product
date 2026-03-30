@@ -39,6 +39,32 @@ export class VerifyOtpDto {
   otp: string;
 }
 
+export class ChangePasswordDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  oldPassword: string;
 
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  newPassword: string;
+}
 
+export class ResetPasswordDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  otp: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+}
 

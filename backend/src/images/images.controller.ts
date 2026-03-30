@@ -13,7 +13,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ImagesService } from './images.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetUser } from '../auth/decorators/get-user.decorator';
+import { ExtractUser } from '../auth/decorators/get-user.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Images/Media')
@@ -41,7 +41,7 @@ export class ImagesController {
   })
   async uploadImages(
     @UploadedFiles() files: Express.Multer.File[],
-    @GetUser() user: any,
+    @ExtractUser() user: any,
     @Body('entity_type') entityType: string,
     @Body('entity_id') entityId: string,
     @Body('image_type') imageType?: string,

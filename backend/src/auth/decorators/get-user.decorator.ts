@@ -1,9 +1,10 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
-export const GetUser = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext) => {
+export const ExtractUser = createParamDecorator(
+  (data: string, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    return request.user;
+    const user = request.user; // Populated by JwtAuthGuard
+    return data ? user[data] : user;
   },
 );
 

@@ -18,7 +18,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { GetUser } from '../auth/decorators/get-user.decorator';
+import { ExtractUser } from '../auth/decorators/get-user.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 @ApiTags('Products')
@@ -107,7 +107,7 @@ export class ProductsController {
   async uploadImages(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFiles() files: Express.Multer.File[],
-    @GetUser() user: any,
+    @ExtractUser() user: any,
   ) {
     return this.productsService.addImages(id, files, user.user_id);
   }

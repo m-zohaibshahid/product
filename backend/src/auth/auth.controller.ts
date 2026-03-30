@@ -8,10 +8,10 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDto, VerifyOtpDto } from './dto/register.dto';
+import { ChangePasswordDto, RegisterDto, ResetPasswordDto, VerifyOtpDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { GetUser } from './decorators/get-user.decorator';
+import { ExtractUser } from './decorators/get-user.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { returnUserWithoutPassword } from './shared/authentication';
 
@@ -45,7 +45,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get user profile' })
   @ApiResponse({ status: 200, description: 'User profile fetched successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getProfile(@GetUser() user: any) {
+  async getProfile(@ExtractUser() user: any) {
     return this.authService.getProfile(user.user_id);
   }
 
@@ -66,11 +66,53 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current session user info' })
   @ApiResponse({ status: 200, description: 'Current user session fetched successfully.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getMe(@GetUser() user: any) {
-    const userWithoutPassword = await returnUserWithoutPassword(user);
+  async getMe(@ExtractUser() user: any) {
+    const userWithoutPassword = returnUserWithoutPassword(user);
     return {
       user: userWithoutPassword,
       message: 'Current user information',
     };
+  }
+
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend OTP' })
+  @ApiBody({ type: VerifyOtpDto })
+  @ApiResponse({ status: 200, description: 'OTP resent successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async resendOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.resendOtp(verifyOtpDto.email);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Forgot password' })
+  @ApiResponse({ status: 200, description: 'Password forgot successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @UseGuards(JwtAuthGuard)
+  async forgotPassword(@ExtractUser() user: any) {
+    return this.authService.forgotPassword(user.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password reset successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @UseGuards(JwtAuthGuard)
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change password' })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiResponse({ status: 200, description: 'Password changed successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @UseGuards(JwtAuthGuard)
+  async changePassword(@Body() changePasswordDto: ChangePasswordDto, @ExtractUser('user_id') userId: number) {
+    return this.authService.changePassword(changePasswordDto, userId);
   }
 }

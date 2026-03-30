@@ -11,7 +11,7 @@ const redis = new Redis();
 async function createToken(user: User, jwtService: JwtService) {
     const payload = {
       sub: user.user_id,
-      username: user.username,
+      email: user.email,
       role: user.role?.name,
       status: user.status,
     };
@@ -22,7 +22,7 @@ async function createToken(user: User, jwtService: JwtService) {
 async function createRefreshToken(user: User, jwtService: JwtService) {
     const payload = {
       sub: user.user_id,
-      username: user.username,
+      email: user.email,
       role: user.role?.name,
       status: user.status,
     };

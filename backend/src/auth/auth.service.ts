@@ -6,7 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Role } from '../entities/role.entity';
-import { RegisterDto, VerifyOtpDto } from './dto/register.dto';
+import { ChangePasswordDto, RegisterDto, ResetPasswordDto, VerifyOtpDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -111,6 +111,56 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
     return SuccessResponse('Profile fetched successfully', {
+      user: returnUserWithoutPassword(user),
+    });
+  }
+
+  async resendOtp(email: string) {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    await sendOtp(email);
+    return SuccessResponse('OTP resent successfully', {
+      email,
+    });
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    await sendOtp(email);
+    return SuccessResponse('OTP resent successfully', {
+      email,
+    });
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    await verifyOtp(resetPasswordDto.email, resetPasswordDto.otp);
+    const user = await this.userRepository.findOne({ where: { email: resetPasswordDto.email } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    const password_hash = await hashPassword(resetPasswordDto.password);
+    user.password_hash = password_hash;
+    await this.userRepository.save(user);
+    return SuccessResponse('Password reset successfully', {
+      email: resetPasswordDto.email,
+    });
+  }
+
+  async changePassword(changePasswordDto: ChangePasswordDto, userId: number) {
+    const user = await this.userRepository.findOne({ where: { user_id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    await comparePassword(changePasswordDto.oldPassword, user.password_hash);
+    const password_hash = await hashPassword(changePasswordDto.newPassword);
+    user.password_hash = password_hash;
+    await this.userRepository.save(user);
+    return SuccessResponse('Password changed successfully', {
       user: returnUserWithoutPassword(user),
     });
   }
