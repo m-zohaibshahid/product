@@ -21,6 +21,9 @@ export class User {
   @Column({ length: 255 })
   password_hash: string;
 
+  @Column({ length: 255, unique: true, nullable: true })
+  email: string;
+
   @Column({ length: 100, nullable: true })
   full_name: string;
 

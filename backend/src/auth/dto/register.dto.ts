@@ -25,12 +25,20 @@ export class RegisterDto {
   @IsNumber()
   @IsNotEmpty()
   role_id: number;
+}
+
+export class VerifyOtpDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  email: string;
 
   @ApiProperty()
   @IsString()
-  @IsOptional()
-  otp?: string;
+  @IsNotEmpty()
+  otp: string;
 }
+
 
 
 

@@ -26,7 +26,7 @@ try {
         subject: 'OTP Verification',
         text: 'Your OTP is: ' + otp,
     };
-    console.log("OTP sent successfully", { ...mailOptions, text: 'Your OTP is: ****' })
+    console.log("OTP sent successfully", { ...mailOptions, text: `Your OTP is: ${otp}` })
     await transporter.sendMail(mailOptions);
 } catch (error) {
     console.error("Failed to send OTP", error);

@@ -6,14 +6,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Role } from '../entities/role.entity';
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, VerifyOtpDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import {
   createToken,
   comparePassword,
   returnUserWithoutPassword,
-  getOneUser,
   getRoleOfUser,
   hashPassword,
   verifyOtp,
@@ -32,39 +31,63 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto) {
-
-    const existingUser = await getOneUser(registerDto.username, this.userRepository);
-    await getRoleOfUser(registerDto.role_id, this.roleRepository);
-    if (!registerDto.otp) {
-      await sendOtp(registerDto.email);
-      return SuccessResponse('OTP sent successfully. Please check your email.', {
-        email: registerDto.email,
-        status: 'pending_verification',
-      });
+    const existingUser = await this.userRepository.findOne({ where: { username: registerDto.username } });
+    if (existingUser) {
+      throw new UnauthorizedException('Username already taken');
     }
-    await verifyOtp(registerDto.email, registerDto.otp);
-    const password_hash = await hashPassword(registerDto.password);
+    const existingEmail = await this.userRepository.findOne({ where: { email: registerDto.email } });
+    if (existingEmail) {
+      throw new UnauthorizedException('Email already registered');
+    }
 
+    await getRoleOfUser(registerDto.role_id, this.roleRepository);
+    
+    const password_hash = await hashPassword(registerDto.password);
     const userPayload = {
       username: registerDto.username,
+      email: registerDto.email,
       password_hash,
       full_name: registerDto.full_name,
       role_id: registerDto.role_id,
-      status: 'active',
+      status: 'inactive',
     };
 
     const user = this.userRepository.create(userPayload);
     const savedUser = await this.userRepository.save(user);
 
-    return SuccessResponse('User registered successfully, Please check otp to verify your account', {
+    // Send OTP for verification
+    await sendOtp(registerDto.email);
+
+    return SuccessResponse('User registered successfully. Please verify your account with the OTP sent to your email.', {
       user: returnUserWithoutPassword(savedUser),
+      email: registerDto.email,
     }, 201);
   }
 
+  async verifyOtp(verifyOtpDto: VerifyOtpDto) {
+    await verifyOtp(verifyOtpDto.email, verifyOtpDto.otp);
+
+    const user = await this.userRepository.findOne({ where: { email: verifyOtpDto.email } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    user.status = 'active';
+    await this.userRepository.save(user);
+
+    return SuccessResponse('OTP verified successfully', {
+      email: verifyOtpDto.email,
+      status: 'active',
+    });
+  }
   async login(loginDto: LoginDto) {
-    const user = await getOneUser(loginDto.username, this.userRepository);
+    const user = await this.userRepository.findOne({ where: { email: loginDto.email }, relations: ['role'] });
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     if (user.status !== 'active') {
-        throw new UnauthorizedException('User account is inactive');
+      throw new UnauthorizedException('User account is not verified. Please verify your OTP.');
     }
     await comparePassword(loginDto.password, user.password_hash);
     const access_token = await createToken(user, this.jwtService);
@@ -82,9 +105,11 @@ export class AuthService {
     return returnUserWithoutPassword(user);
   }
 
-  async getProfile(userId: string) {
-    const user = await getOneUser(userId, this.userRepository);
-
+  async getProfile(userId: number) {
+    const user = await this.userRepository.findOne({where: {user_id: userId}, relations: ['role']});
+    if(!user){
+      throw new UnauthorizedException('User not found');
+    }
     return SuccessResponse('Profile fetched successfully', {
       user: returnUserWithoutPassword(user),
     });

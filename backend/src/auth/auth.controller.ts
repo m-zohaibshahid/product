@@ -8,7 +8,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, VerifyOtpDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
@@ -48,6 +48,17 @@ export class AuthController {
   async getProfile(@GetUser() user: any) {
     return this.authService.getProfile(user.user_id);
   }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP' })
+  @ApiBody({ type: VerifyOtpDto })
+  @ApiResponse({ status: 200, description: 'OTP verified successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(verifyOtpDto);
+  }
+
 
   @Get('me')
   @ApiBearerAuth()

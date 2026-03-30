@@ -50,30 +50,9 @@ async function comparePassword(password: string, hash: string) {
     }
 }
 
-async function returnUserWithoutPassword(user: any) {
+function returnUserWithoutPassword(user: any) {
     const { password_hash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
-}
-
-async function getOneUser(username: string, userRepository: Repository<User>) {
-    const user = await userRepository.findOne({
-        where: { username },
-        relations: ['role'],
-    });
-
-    if (!user) {
-        throw new UnauthorizedException('Invalid credentials');
-    }
-
-    if (user.status !== 'active') {
-        throw new UnauthorizedException('User account is inactive');
-    }
-    return user;
-}
-
-
-async function getAllUsers(userRepository: Repository<User>){
-    return await userRepository.find();
 }
 
 async function getRoleOfUser(role_id: number, roleRepository: Repository<Role>){
@@ -104,8 +83,6 @@ export {
     hashPassword,
     comparePassword,
     returnUserWithoutPassword,
-    getOneUser,
-    getAllUsers,
     getRoleOfUser,
     verifyOtp
 }
