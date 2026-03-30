@@ -15,35 +15,41 @@ import { UpdateBrandDto } from './dto/update-brand.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-// import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-// import { RolesGuard } from '../../auth/guards/roles.guard';
-// import { Roles } from '../../auth/decorators/roles.decorator';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
+@ApiTags('Brands')
 @Controller('brands')
-@UseGuards(JwtAuthGuard)
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
-  @Post()
-  @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
-  create(@Body() createBrandDto: CreateBrandDto) {
-    return this.brandsService.create(createBrandDto);
-  }
-
   @Get()
+  @ApiOperation({ summary: 'List all brands' })
   findAll() {
     return this.brandsService.findAll();
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get brand by ID' })
+  @ApiParam({ name: 'id', description: 'Brand ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.brandsService.findOne(id);
   }
 
+  @Post()
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'manager')
+  @ApiOperation({ summary: 'Create a new brand' })
+  create(@Body() createBrandDto: CreateBrandDto) {
+    return this.brandsService.create(createBrandDto);
+  }
+
   @Patch(':id')
+  @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('admin', 'manager')
+  @ApiOperation({ summary: 'Update brand info' })
+  @ApiParam({ name: 'id', description: 'Brand ID' })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateBrandDto: UpdateBrandDto,
@@ -52,11 +58,12 @@ export class BrandsController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
   @UseGuards(RolesGuard)
   @Roles('admin')
+  @ApiOperation({ summary: 'Delete a brand' })
+  @ApiParam({ name: 'id', description: 'Brand ID' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.brandsService.remove(id);
   }
 }
-
-

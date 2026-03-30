@@ -18,11 +18,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.authService.validateUserById(payload.sub);
-    if (!user) {
-      throw new UnauthorizedException();
+    if (payload.status !== 'active') {
+      throw new UnauthorizedException('User account is inactive');
     }
-    return user;
+    return {
+      user_id: payload.sub,
+      username: payload.username,
+      role_name: payload.role,
+      status: payload.status,
+    };
   }
 }
 

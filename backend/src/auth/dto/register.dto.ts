@@ -25,6 +25,11 @@ export class RegisterDto {
   @IsNumber()
   @IsNotEmpty()
   role_id: number;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  otp?: string;
 }
 
 

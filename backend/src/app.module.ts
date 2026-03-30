@@ -23,7 +23,6 @@ import { OrderLine } from './entities/order-line.entity';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-
 import { RolesModule } from './roles/roles.module';
 import { ProductsModule } from './products/products.module';
 import { ImagesModule } from './images/images.module';
@@ -38,6 +37,7 @@ import { SalesModule } from './sales/sales.module';
 import { CustomersModule } from './customers/customers.module';
 
 import { OrdersModule } from './orders/orders.module';
+import { RedisModule } from '@nestjs-modules/ioredis';
 
 @Module({
   imports: [
@@ -46,6 +46,10 @@ import { OrdersModule } from './orders/orders.module';
       inject: [],
       useFactory: () => databaseConfig(),
     }),
+    RedisModule.forRoot({
+      type: 'single',
+      url: 'redis://localhost:6379',
+   }),
     TypeOrmModule.forFeature([
       Brand,
       Category,
