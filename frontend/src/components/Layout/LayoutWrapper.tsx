@@ -10,40 +10,34 @@ const publicRoutes = ['/login', '/register'];
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isAuthenticated, loading } = useAuth();
-  const isPublicRoute = publicRoutes.includes(pathname || '');
+  const isPublic = publicRoutes.includes(pathname || '');
 
-  // Show loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading...</p>
-        </div>
+      <div style={{
+        minHeight: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 16,
+      }}>
+        <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</p>
       </div>
     );
   }
 
-  // For public routes (login/register), don't show sidebar/header
-  if (isPublicRoute) {
-    return <>{children}</>;
-  }
+  if (isPublic) return <>{children}</>;
 
-  // For protected routes, show sidebar/header only if authenticated
   if (isAuthenticated) {
     return (
-      <div className="flex h-screen">
+      <div className="app-shell">
         <Sidebar />
-        <div className="flex flex-1 flex-col ml-64">
+        <div className="main-content">
           <Header />
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="page-body">{children}</main>
         </div>
       </div>
     );
   }
 
-  // If not authenticated and not on public route, show children (will redirect via ProtectedRoute)
   return <>{children}</>;
 }
-
-

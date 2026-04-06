@@ -1,181 +1,221 @@
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogIn, Lock, User, AlertCircle, Boxes } from 'lucide-react';
+
+// ─── tiny inline SVG icons ──────────────────────────────────
+const IconBox = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+  </svg>
+);
+const IconUser = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+const IconLock = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+const IconEye = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+const IconEyeOff = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
+const IconAlert = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+const IconArrow = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+  </svg>
+);
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated, loading: authLoading } = useAuth();
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  // Redirect if already authenticated (using useEffect to avoid render-time navigation)
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      router.push('/dashboard');
-    }
+    if (!authLoading && isAuthenticated) router.replace('/dashboard');
   }, [isAuthenticated, authLoading, router]);
 
-  // Show loading or nothing if redirecting
-  if (authLoading || isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    if (error) setError('');
+  };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!form.username.trim() || !form.password.trim()) {
+      setError('Please fill in all fields.');
+      return;
+    }
     setLoading(true);
-
+    setError('');
     try {
-      await login(formData);
-      // Small delay to ensure state updates
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 100);
+      await login({ username: form.username.trim(), password: form.password });
+      router.push('/dashboard');
     } catch (err: any) {
-      console.error('Login page error:', err);
-      let errorMessage = 'Invalid username or password. Please try again.';
-      
-      if (err.response) {
-        // Server responded with error status
-        errorMessage = err.response.data?.message || 
-                      err.response.data?.error || 
-                      `Server error: ${err.response.status} ${err.response.statusText}`;
-      } else if (err.request) {
-        // Request was made but no response received
-        errorMessage = 'Cannot connect to server. Please check if the backend is running on http://localhost:5500';
-      } else if (err.message) {
-        // Error message from the error object
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      const msg = err?.response?.data?.message || err?.message || 'Invalid credentials. Please try again.';
+      setError(typeof msg === 'string' ? msg : 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" style={{ width: 28, height: 28 }} />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 px-4">
-      <div className="w-full max-w-md">
-        {/* Logo and Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-4 shadow-lg">
-            <Boxes className="h-8 w-8 text-white" />
+    <div className="auth-page">
+      {/* Decorative orbs */}
+      <div aria-hidden="true" style={{
+        position: 'fixed', top: '10%', left: '5%', width: 400, height: 400,
+        background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)',
+        borderRadius: '50%', pointerEvents: 'none', filter: 'blur(30px)',
+      }} />
+      <div aria-hidden="true" style={{
+        position: 'fixed', bottom: '10%', right: '5%', width: 350, height: 350,
+        background: 'radial-gradient(circle, rgba(6,182,212,0.1) 0%, transparent 70%)',
+        borderRadius: '50%', pointerEvents: 'none', filter: 'blur(30px)',
+      }} />
+
+      <div className="auth-card glass animate-fadeUp">
+        {/* Logo */}
+        <div className="auth-logo">
+          <div className="auth-logo-icon">
+            <IconBox />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-slate-400">Sign in to your account to continue</p>
+          <div className="auth-logo-text">
+            <span className="name">InvenX</span>
+            <span className="tagline">Inventory Management System</span>
+          </div>
         </div>
 
-        {/* Login Card */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Error Message */}
-            {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+        {/* Heading */}
+        <h1 className="auth-heading">Welcome back</h1>
+        <p className="auth-subheading">Sign in to your account to continue managing your inventory.</p>
 
-            {/* Username Field */}
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-slate-200 mb-2">
-                Username
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="username"
-                  type="text"
-                  required
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="block w-full pl-10 pr-3 py-3 border border-white/20 rounded-lg bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="Enter your username"
-                  disabled={loading}
-                />
-              </div>
+        {/* Error */}
+        {error && (
+          <div className="alert alert-error animate-fadeIn" style={{ marginBottom: 20 }}>
+            <IconAlert />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Form */}
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {/* Username */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="username">Username</label>
+            <div className="input-wrapper">
+              <span className="input-icon" style={{ color: focusedField === 'username' ? 'var(--brand-1)' : undefined }}>
+                <IconUser />
+              </span>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                autoFocus
+                className="form-input"
+                placeholder="Enter your username"
+                value={form.username}
+                onChange={handleChange}
+                onFocus={() => setFocusedField('username')}
+                onBlur={() => setFocusedField(null)}
+                disabled={loading}
+              />
             </div>
+          </div>
 
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-200 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="block w-full pl-10 pr-3 py-3 border border-white/20 rounded-lg bg-white/5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="Enter your password"
-                  disabled={loading}
-                />
-              </div>
+          {/* Password */}
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label className="form-label" htmlFor="password">Password</label>
             </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="h-5 w-5" />
-                  <span>Sign In</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Register Link */}
-          <div className="mt-6 text-center">
-            <p className="text-slate-400 text-sm">
-              Don't have an account?{' '}
-              <Link
-                href="/register"
-                className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+            <div className="input-wrapper has-right">
+              <span className="input-icon" style={{ color: focusedField === 'password' ? 'var(--brand-1)' : undefined }}>
+                <IconLock />
+              </span>
+              <input
+                id="password"
+                name="password"
+                type={showPw ? 'text' : 'password'}
+                autoComplete="current-password"
+                className="form-input"
+                placeholder="Enter your password"
+                value={form.password}
+                onChange={handleChange}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="input-icon-right"
+                onClick={() => setShowPw(v => !v)}
+                tabIndex={-1}
+                aria-label={showPw ? 'Hide password' : 'Show password'}
               >
-                Create one now
-              </Link>
-            </p>
+                {showPw ? <IconEyeOff /> : <IconEye />}
+              </button>
+            </div>
           </div>
-        </div>
+
+          {/* Submit */}
+          <button
+            id="login-submit-btn"
+            type="submit"
+            className="btn btn-primary btn-lg btn-full"
+            disabled={loading}
+            style={{ marginTop: 6 }}
+          >
+            {loading ? (
+              <>
+                <span className="spinner" />
+                Signing in…
+              </>
+            ) : (
+              <>
+                Sign In
+                <IconArrow />
+              </>
+            )}
+          </button>
+        </form>
 
         {/* Footer */}
-        <p className="text-center text-slate-500 text-sm mt-6">
-          © 2024 Cloth Inventory Management System
+        <p className="auth-footer-link" style={{ marginTop: 32 }}>
+          Don&apos;t have an account?{' '}
+          <Link href="/register">Create one free</Link>
         </p>
       </div>
     </div>
   );
 }
-

@@ -1,73 +1,103 @@
 'use client';
 
-import { Bell, Search, User, LogOut } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+
+const IconBell = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+);
+const IconLogOut = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+
+const pageTitles: Record<string, string> = {
+  '/dashboard':      'Dashboard',
+  '/products':       'Products',
+  '/stock':          'Stock',
+  '/brands':         'Brands',
+  '/categories':     'Categories',
+  '/purchase-orders':'Purchase Orders',
+  '/sales':          'Sales',
+  '/suppliers':      'Suppliers',
+  '/reports':        'Reports',
+  '/settings':       'Settings',
+};
+
+function getTitle(pathname: string | null): string {
+  if (!pathname) return 'Dashboard';
+  for (const [path, title] of Object.entries(pageTitles)) {
+    if (pathname === path || pathname.startsWith(path + '/')) return title;
+  }
+  return 'InvenX';
+}
 
 export default function Header() {
+  const pathname = usePathname();
   const { user, logout } = useAuth();
-  const router = useRouter();
-
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
+  const title = getTitle(pathname);
+  const initials = user?.username?.slice(0, 2).toUpperCase() ?? 'U';
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-      <div className="flex h-16 items-center justify-between px-6">
-        {/* Search */}
-        <div className="flex flex-1 items-center max-w-md">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search products, orders, suppliers..."
-              className="input pl-10 w-full bg-gray-50 focus:bg-white"
-            />
+    <header className="topbar">
+      <span className="topbar-title">{title}</span>
+      <div className="topbar-spacer" />
+
+      {/* Notification */}
+      <button
+        className="btn btn-ghost btn-sm"
+        style={{ position: 'relative', padding: '7px 10px', borderRadius: 'var(--r-md)' }}
+        aria-label="Notifications"
+      >
+        <IconBell />
+        <span style={{
+          position: 'absolute', top: 6, right: 6,
+          width: 7, height: 7, borderRadius: '50%',
+          background: 'var(--brand-1)',
+          border: '1.5px solid var(--bg-base)',
+        }} />
+      </button>
+
+      {/* User chip */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '5px 10px', borderRadius: 'var(--r-md)',
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid var(--border)',
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: 'linear-gradient(135deg, var(--brand-1), var(--brand-2))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
+          }}>
+            {initials}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+              {user?.username ?? 'User'}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.2 }}>
+              {(user as any)?.role?.name ?? 'Staff'}
+            </span>
           </div>
         </div>
 
-        {/* Right side actions */}
-        <div className="flex items-center gap-4">
-          {/* Notifications */}
-          <button className="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 transition-colors group">
-            <Bell className="h-5 w-5 group-hover:scale-110 transition-transform" />
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse"></span>
-          </button>
-
-          {/* User menu */}
-          <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-900">
-                {user?.full_name || user?.username || 'User'}
-              </p>
-              <p className="text-xs text-gray-500 capitalize">
-                {user?.role?.name?.replace('_', ' ') || 'Role'}
-              </p>
-            </div>
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md hover:shadow-lg transition-shadow cursor-pointer text-white text-xs font-semibold">
-              {getInitials(user?.full_name || user?.username)}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
-              title="Logout"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={logout}
+          className="btn btn-ghost btn-sm"
+          style={{ padding: '7px 10px', borderRadius: 'var(--r-md)', color: 'var(--text-muted)' }}
+          title="Sign out"
+        >
+          <IconLogOut />
+        </button>
       </div>
     </header>
   );
