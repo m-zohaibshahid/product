@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import LayoutWrapper from "@/components/Layout/LayoutWrapper";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Atelier Inventory — Premium Clothier Management",
-  description: "Bespoke inventory management system for high-end fashion and tailoring.",
+  title: "Atelier — Premium Fashion Portal",
+  description: "Bespoke inventory management and premium shopping experience.",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -20,10 +20,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased selection:bg-primary/10 selection:text-primary">
-        <LayoutWrapper>
+      <body className="antialiased selection:bg-blue-500/10 selection:text-blue-600 min-h-screen" suppressHydrationWarning>
+        <ThemeProvider>
           {children}
-        </LayoutWrapper>
+        </ThemeProvider>
       </body>
     </html>
   );

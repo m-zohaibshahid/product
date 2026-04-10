@@ -1,113 +1,123 @@
 'use client';
-
-import React from 'react';
+import React, { useState } from 'react';
 import StatCard from '@/components/ui/StatCard';
-import AlertItem from '@/components/ui/AlertItem';
-import TransactionItem from '@/components/ui/TransactionItem';
 import { 
   TrendingUp, 
   Package, 
-  PackageCheck, 
-  Clock, 
-  ArrowRight,
-  TrendingDown
+  DollarSign, 
+  ArrowRight, 
+  AlertTriangle,
+  PackageCheck,
+  Calendar,
+  Clock,
+  ArrowUpRight,
+  TrendingDown,
+  Box,
+  Activity,
+  History,
+  Briefcase,
+  ChevronRight
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import Link from 'next/link';
 
 const chartData = [
   { name: 'Mon', revenue: 4000 },
   { name: 'Tue', revenue: 3000 },
-  { name: 'Wed', revenue: 5000 },
-  { name: 'Thu', revenue: 2780 },
-  { name: 'Fri', revenue: 1890 },
-  { name: 'Sat', revenue: 2390 },
-  { name: 'Sun', revenue: 3490 },
+  { name: 'Wed', revenue: 5500 },
+  { name: 'Thu', revenue: 4500 },
+  { name: 'Fri', revenue: 7000 },
+  { name: 'Sat', revenue: 6000 },
+  { name: 'Sun', revenue: 8500 },
 ];
 
-export default function Dashboard() {
+export default function DashboardPage() {
   return (
-    <div className="space-y-16 animate-in fade-in duration-700">
-      {/* Header Section */}
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+    <div className="space-y-12 animate-fade-in pb-20">
+      {/* Header Row */}
+      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-100 dark:border-zinc-800 pb-10">
         <div>
-          <h2 className="display-md text-primary tracking-tight mb-2 italic-elegant opacity-90">Daily Overview</h2>
-          <div className="flex items-center gap-2 text-on-surface-variant/70 label-md text-xs font-semibold uppercase tracking-widest leading-none">
-            <Clock className="w-3.5 h-3.5" strokeWidth={2} />
-            <span>Status as of Oct 24, 2023 • 09:42 AM</span>
+          <h1 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter italic-elegant">Daily Overview</h1>
+          <div className="flex items-center gap-3 mt-3 text-zinc-400 font-bold uppercase tracking-widest text-[10px]">
+            <Clock className="w-4 h-4 text-blue-500" /> Status as of Oct 24, 2023 • 09:42 AM
           </div>
+        </div>
+        <div className="flex gap-4">
+           <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-zinc-500 text-[10px] font-black uppercase tracking-widest">
+              <Calendar className="w-4 h-4" /> Live Feed
+           </div>
         </div>
       </section>
 
-      {/* Top Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-        <StatCard 
-          label="Today's Revenue" 
-          value="$14,842.00" 
-          subValue="+12% from yesterday"
-          icon={TrendingUp}
-          variant="lowest"
-        />
-        <StatCard 
-          label="Active Stock" 
-          value="2,410" 
-          subValue="Across 12 Categories"
-          icon={Package}
-          variant="lowest"
-        />
-        <StatCard 
-          label="Inbound" 
-          value="18" 
-          subValue="Expected by EOD"
-          icon={PackageCheck}
-          variant="lowest"
-        />
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <Link href="/reports" className="block hover:scale-[1.02] transition-transform">
+          <StatCard 
+            label="Today's Revenue" 
+            value="$14,842.00" 
+            subValue="+12% from yesterday"
+            icon={DollarSign}
+            variant="lowest"
+          />
+        </Link>
+        <Link href="/inventory" className="block hover:scale-[1.02] transition-transform">
+          <StatCard 
+            label="Active Stock" 
+            value="2,410" 
+            subValue="Across 12 Categories"
+            icon={Package}
+            variant="lowest"
+          />
+        </Link>
+        <Link href="/purchase-orders" className="block hover:scale-[1.02] transition-transform">
+          <StatCard 
+            label="Inbound" 
+            value="18" 
+            subValue="Expected by EOD"
+            icon={PackageCheck}
+            variant="lowest"
+          />
+        </Link>
       </div>
 
-      {/* Main Grid: Data & Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pt-4">
-        {/* Sales Velocity Chart Card */}
-        <article className="lg:col-span-12 xl:col-span-8 p-10 bg-surface-container-lowest rounded-xl ambient-shadow flex flex-col gap-8 transition-all hover:translate-y-[-4px] group">
+      {/* Analytics & Alerts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* Sales Velocity Chart */}
+        <article className="lg:col-span-8 bg-white dark:bg-zinc-900 rounded-[40px] border border-zinc-100 dark:border-zinc-800 p-10 shadow-xl space-y-8 flex flex-col">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="title-lg text-primary tracking-tight mb-1 opacity-90">Sales Velocity</h3>
-              <p className="text-on-surface-variant/70 text-xs uppercase tracking-widest font-semibold font-medium leading-none">Weekly trend across all channels</p>
+              <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic-elegant">Sales Velocity</h3>
+              <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-1">Weekly performance across channels</p>
             </div>
-            <div className="p-3 rounded-full bg-surface-container-low text-primary/70 group-hover:scale-110 transition-transform cursor-pointer">
-              <TrendingUp className="w-5 h-5" />
+            <div className="w-12 h-12 bg-zinc-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400">
+              <TrendingUp className="w-6 h-6" />
             </div>
           </div>
           
-          <div className="h-[320px] w-full pt-4 pr-4">
+          <div className="h-[340px] w-full pt-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#004385" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#004385" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#424750', fontSize: 11, fontWeight: 500 }}
-                  interval="preserveStartEnd"
+                  tick={{ fill: '#a1a1aa', fontSize: 10, fontWeight: 700 }}
                 />
                 <Tooltip 
-                  contentStyle={{ 
-                    borderRadius: '8px', 
-                    border: 'none', 
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    padding: '12px 16px'
-                  }} 
+                   contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
+                   cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '5 5' }}
                 />
                 <Area 
                   type="monotone" 
                   dataKey="revenue" 
-                  stroke="#002d5d" 
-                  strokeWidth={2.5}
+                  stroke="#3b82f6" 
+                  strokeWidth={4}
                   fillOpacity={1} 
                   fill="url(#colorRevenue)" 
                 />
@@ -116,72 +126,75 @@ export default function Dashboard() {
           </div>
         </article>
 
-        {/* Critical Alerts Row or List */}
-        <article className="lg:col-span-12 xl:col-span-4 p-10 bg-surface-container-low rounded-xl flex flex-col gap-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="title-lg text-primary tracking-tight mb-1 opacity-90 underline-offset-8 decoration-outline-variant/30 decoration-2">Critical Alerts</h3>
-              <p className="text-on-surface-variant/70 text-xs uppercase tracking-widest font-semibold font-medium leading-none">Stock level attention required</p>
-            </div>
+        {/* Critical Alerts */}
+        <article className="lg:col-span-4 bg-zinc-900 dark:bg-zinc-950 rounded-[40px] p-10 shadow-2xl space-y-10 flex flex-col justify-between">
+          <div className="space-y-1">
+            <h3 className="text-xl font-black text-white uppercase tracking-tighter italic-elegant">Critical Alerts</h3>
+            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[9px]">Inventory attention required</p>
           </div>
           
-          <div className="flex flex-col gap-10 px-2 py-4">
-            <AlertItem label="Navy Wool Blazer" subValue="2 units remaining" />
-            <AlertItem label="Classic Oxford White" subValue="5 units remaining" />
-            <AlertItem label="Italian Silk Tie - Red" subValue="Restocking soon" />
+          <div className="space-y-8">
+            {[
+              { label: 'Navy Wool Blazer', sub: '2 units remaining' },
+              { label: 'Oxford White Shirt', sub: '5 units remaining' },
+              { label: 'Italian Silk Tie', sub: 'Restocking soon' },
+            ].map((alert, i) => (
+              <div key={i} className="flex gap-4 group cursor-pointer">
+                 <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-red-500 group-hover:bg-red-500 group-hover:text-white transition-all">
+                    <AlertTriangle className="w-5 h-5" />
+                 </div>
+                 <div>
+                    <p className="text-sm font-black text-white uppercase tracking-tight group-hover:text-blue-400 transition-colors">{alert.label}</p>
+                    <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">{alert.sub}</p>
+                 </div>
+              </div>
+            ))}
           </div>
           
-          <div className="mt-auto group cursor-pointer pt-6 flex items-center gap-3 text-primary label-md text-xs tracking-widest font-bold">
-            <span>View All Stock Alerts</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-2 transition-transform" strokeWidth={3} />
-          </div>
+          <Link href="/inventory" className="flex items-center justify-between group pt-8 border-t border-white/5">
+            <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] group-hover:text-white transition-colors">View All Lifecycle Alerts</span>
+            <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-white group-hover:translate-x-2 transition-all" />
+          </Link>
         </article>
       </div>
 
-      {/* Recent Transactions List Card */}
-      <section className="pt-8">
-        <div className="p-10 bg-surface-container-lowest rounded-xl ambient-shadow w-full flex flex-col gap-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="title-lg text-primary tracking-tight mb-1 opacity-90">Recent Transactions</h3>
-              <p className="text-on-surface-variant/70 text-xs uppercase tracking-widest font-semibold font-medium leading-none">Seamlessly tracking atelier activity</p>
-            </div>
-            <button className="text-xs font-bold text-primary opacity-60 hover:opacity-100 transition-opacity uppercase tracking-widest">Clear Log</button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            <TransactionItem 
-              label="Sale #2311 - Julian Reed" 
-              subLabel="Navy Wool Blazer x 2, Silk Tie x 1" 
-              time="09:42 AM" 
-              type="sale"
-            />
-            <TransactionItem 
-              label="Restock - Italian Fabric Source" 
-              subLabel="Tweed Wool, 45 Meters" 
-              time="08:20 AM" 
-              type="restock"
-            />
-            <TransactionItem 
-              label="Return #1982 - Private Collection" 
-              subLabel="Classic Oxford White (L), Defective Fit" 
-              time="Yesterday" 
-              type="return"
-            />
-            <TransactionItem 
-              label="Stock Transfer - Downtown Showroom" 
-              subLabel="Formal Socks x 40 Pairs" 
-              time="Yesterday" 
-              type="transfer"
-            />
-          </div>
+      {/* Transaction Feed */}
+      <section className="bg-white dark:bg-zinc-900 rounded-[40px] border border-zinc-100 dark:border-zinc-800 shadow-xl overflow-hidden p-10">
+        <div className="flex items-center justify-between mb-10 pb-6 border-b border-zinc-50 dark:border-zinc-800">
+           <div>
+              <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic-elegant leading-none">Global Ledger Feed</h3>
+              <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-1">Real-time settlement activity</p>
+           </div>
+           <button className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all">Export Logs</button>
+        </div>
+        
+        <div className="space-y-8">
+           {[
+             { ref: 'TRX-9821-A', cat: 'Bespoke Revenue', amt: '+$14,842.00', status: 'Settled', icon: Briefcase },
+             { ref: 'EXP-4402-B', cat: 'Atelier Rent', amt: '-$2,100.00', status: 'Pending', icon: Activity },
+             { ref: 'TRX-9710-C', cat: 'Fabric Order', amt: '-$8,450.00', status: 'Audited', icon: Package },
+           ].map((item, i) => (
+             <div key={i} className="flex items-center justify-between group cursor-pointer">
+                <div className="flex items-center gap-6">
+                   <div className="w-12 h-12 bg-zinc-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      <item.icon className="w-5 h-5" />
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-black">{item.ref}</p>
+                      <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">{item.cat}</p>
+                   </div>
+                </div>
+                <div className="flex items-center gap-12">
+                   <div className="text-right">
+                      <p className={`text-lg font-black ${item.amt.startsWith('-') ? 'text-red-500' : 'text-zinc-900 dark:text-white'}`}>{item.amt}</p>
+                      <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">{item.status}</p>
+                   </div>
+                   <ChevronRight className="w-5 h-5 text-zinc-200 group-hover:translate-x-1 group-hover:text-zinc-900 dark:group-hover:text-white transition-all" />
+                </div>
+             </div>
+           ))}
         </div>
       </section>
-      
-      {/* Footer Branding */}
-      <footer className="pt-20 text-center opacity-30 select-none pointer-events-none">
-        <p className="label-md text-[10px] tracking-widest text-primary leading-loose">Crafted for Excellence • The Digital Tailor Inventory Systems v4.2</p>
-      </footer>
     </div>
   );
 }

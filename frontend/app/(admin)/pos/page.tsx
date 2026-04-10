@@ -1,7 +1,5 @@
 'use client';
-
 import React, { useState } from 'react';
-import Button from '@/components/ui/Button';
 import { 
   Search, 
   ShoppingCart, 
@@ -12,25 +10,34 @@ import {
   Trash2,
   CreditCard,
   Banknote,
-  Smartphone
+  Smartphone,
+  CheckCircle2,
+  Package,
+  ArrowRight,
+  TrendingDown,
+  Info,
+  X,
+  CreditCard as CardIcon,
+  Tag
 } from 'lucide-react';
+import Toast from '@/components/ui/Toast';
 
-const categories = ['All', 'Tailored outerwear', 'Accessories', 'Bottoms', 'Seasonal', 'Bespoke Essentials'];
+const categories = ['All', 'Tailored Outerwear', 'Accessories', 'Bottoms', 'Seasonal', 'Bespoke Essentials'];
 
 const products = [
-  { id: 1, name: 'Classic Oxford Shirt', category: 'Bespoke Essentials', price: 185.00, image: 'https://images.unsplash.com/photo-1598033129183-c4f50c717658?auto=format&fit=crop&q=80&w=200&h=200' },
-  { id: 2, name: 'Merino Wool Blazer', category: 'Tailored outerwear', price: 845.00, image: 'https://images.unsplash.com/photo-1594932224010-74f43a3bb053?auto=format&fit=crop&q=80&w=200&h=200' },
-  { id: 3, name: 'Heritage Silk Tie', category: 'Accessories', price: 125.00, image: 'https://images.unsplash.com/photo-1589756823851-4043b23838ae?auto=format&fit=crop&q=80&w=200&h=200' },
-  { id: 4, name: 'Slim-Fit Chinos', category: 'Bottoms', price: 165.00, image: 'https://images.unsplash.com/photo-1473963456434-51772879567c?auto=format&fit=crop&q=80&w=200&h=200' },
-  { id: 5, name: 'Pure Cashmere Scarf', category: 'Seasonal', price: 245.00, image: 'https://images.unsplash.com/photo-1520903920243-00d872128e7a?auto=format&fit=crop&q=80&w=200&h=200' },
-  { id: 6, name: 'Italian Leather Belt', category: 'Accessories', price: 95.00, image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=200&h=200' },
+  { id: 1, name: 'Classic Oxford Shirt', category: 'Bespoke Essentials', price: 185.00, sku: 'SKU-7721', image: 'https://images.unsplash.com/photo-1598033129183-c4f50c717658?auto=format&fit=crop&q=80&w=300&h=300' },
+  { id: 2, name: 'Merino Wool Blazer', category: 'Tailored Outerwear', price: 845.00, sku: 'SKU-8812', image: 'https://images.unsplash.com/photo-1594932224010-74f43a3bb053?auto=format&fit=crop&q=80&w=300&h=300' },
+  { id: 3, name: 'Heritage Silk Tie', category: 'Accessories', price: 125.00, sku: 'SKU-4402', image: 'https://images.unsplash.com/photo-1589756823851-4043b23838ae?auto=format&fit=crop&q=80&w=300&h=300' },
+  { id: 4, name: 'Slim-Fit Chinos', category: 'Bottoms', price: 165.00, sku: 'SKU-1192', image: 'https://images.unsplash.com/photo-1473963456434-51772879567c?auto=format&fit=crop&q=80&w=300&h=300' },
+  { id: 5, name: 'Pure Cashmere Scarf', category: 'Seasonal', price: 245.00, sku: 'SKU-0031', image: 'https://images.unsplash.com/photo-1520903920243-00d872128e7a?auto=format&fit=crop&q=80&w=300&h=300' },
+  { id: 6, name: 'Italian Leather Belt', category: 'Accessories', price: 95.00, sku: 'SKU-5521', image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=300&h=300' },
 ];
 
 export default function POSPage() {
-  const [cart, setCart] = useState<{id: number, name: string, price: number, qty: number}[]>([
-    { id: 1, name: 'Classic Oxford Shirt', price: 185.0, qty: 1 },
-    { id: 3, name: 'Heritage Silk Tie', price: 125.0, qty: 1 }
-  ]);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [cart, setCart] = useState<{id: number, name: string, price: number, qty: number}[]>([]);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
 
   const addToCart = (product: any) => {
     setCart(prev => {
@@ -38,7 +45,9 @@ export default function POSPage() {
       if (existing) {
         return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
       }
-      return [...prev, { ...product, qty: 1 }];
+      setToastMsg(`${product.name} added to draft order.`);
+      setShowToast(true);
+      return [...prev, { id: product.id, name: product.name, price: product.price, qty: 1 }];
     });
   };
 
@@ -52,159 +61,184 @@ export default function POSPage() {
     ));
   };
 
+  const handleCheckout = () => {
+    setToastMsg('Order finalized. Transaction ledger synchronized.');
+    setShowToast(true);
+    setCart([]);
+  };
+
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-  const tax = subtotal * 0.0825;
+  const tax = subtotal * 0.15; // 15% Atelier VAT
   const total = subtotal + tax;
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex gap-12 animate-in fade-in duration-700 overflow-hidden">
-      {/* Left Panel: Product Browser */}
-      <section className="flex-1 flex flex-col gap-10">
-        <header className="flex flex-col gap-6">
-          <div>
-            <h2 className="display-sm text-primary tracking-tight mb-1 italic-elegant opacity-90">Point of Sale (POS)</h2>
-            <p className="text-on-surface-variant/70 label-md text-[10px] font-black uppercase tracking-[0.2em] leading-none">Bespoke Catalog Browser</p>
+    <div className="h-[calc(100vh-6rem)] flex gap-10 animate-fade-in pb-10">
+      {/* Left Panel: Catalog */}
+      <section className="flex-1 flex flex-col gap-10 overflow-hidden">
+        <header className="space-y-8">
+          <div className="flex items-center justify-between">
+             <div>
+                <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter italic-elegant">Bespoke POS</h1>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">Direct Client Engagement Module</p>
+             </div>
+             <div className="flex items-center gap-4">
+                <div className="relative">
+                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <input type="text" placeholder="Search product or SKU..." className="pl-10 pr-6 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold outline-none border-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500 w-64 transition-all" />
+                </div>
+                <button className="p-3 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all">
+                  <Info className="w-5 h-5 text-zinc-400" />
+                </button>
+             </div>
           </div>
 
-          <div className="flex gap-4 items-center">
-            <div className="relative flex-1 group">
-              <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/40 group-focus-within:text-primary transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Search catalog by name or category..." 
-                className="w-full bg-surface-container-low/50 py-4 pl-14 pr-6 rounded-md hover:bg-surface-container-low transition-colors focus:outline-none focus:bg-surface-container-lowest border border-transparent focus:border-outline-variant/10 text-sm font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
-            {categories.map((cat) => (
-              <button 
-                key={cat}
-                className={`px-6 py-2 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all duration-300
-                  ${cat === 'All' 
-                    ? 'bg-primary text-surface-container-lowest shadow-md' 
-                    : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'}`}
-              >
-                {cat}
-              </button>
-            ))}
+          <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+             {categories.map((cat) => (
+                <button 
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all
+                    ${selectedCategory === cat 
+                      ? 'bg-zinc-900 text-white dark:bg-blue-600 shadow-xl shadow-zinc-200 dark:shadow-black/30' 
+                      : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
+                >
+                  {cat}
+                </button>
+             ))}
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pr-4 scrollbar-minimal">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pb-10">
-            {products.map((product) => (
-              <div 
-                key={product.id}
-                onClick={() => addToCart(product)}
-                className="group p-6 bg-surface-container-lowest rounded-xl ambient-shadow cursor-pointer transition-all duration-500 hover:translate-y-[-4px] active:scale-95"
-              >
-                <div className="aspect-square bg-surface-container-low rounded-lg mb-6 overflow-hidden relative">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover grayscale-20 group-hover:grayscale-0 transition-all duration-1000 scale-110 group-hover:scale-100" />
-                  <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="flex-1 overflow-y-auto pr-2 no-scrollbar">
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+              {products.filter(p => selectedCategory === 'All' || p.category === selectedCategory).map((product) => (
+                <div 
+                  key={product.id}
+                  onClick={() => addToCart(product)}
+                  className="group bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-100 dark:border-zinc-800 p-6 cursor-pointer hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 hover:-translate-y-2 active:scale-95"
+                >
+                   <div className="aspect-square rounded-[24px] overflow-hidden mb-6 relative">
+                      <img src={product.image} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt={product.name} />
+                      <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute top-4 right-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-tighter text-zinc-900 dark:text-white border border-white/20">
+                         {product.sku}
+                      </div>
+                   </div>
+                   <div className="space-y-4">
+                      <div>
+                         <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5"><Tag className="w-3 h-3" /> {product.category}</p>
+                         <h3 className="text-lg font-black text-zinc-900 dark:text-white tracking-tighter group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors uppercase">{product.name}</h3>
+                      </div>
+                      <div className="flex items-center justify-between pt-4 border-t border-zinc-50 dark:border-zinc-800">
+                         <span className="text-xl font-bold text-zinc-900 dark:text-white">${product.price.toFixed(2)}</span>
+                         <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:rotate-90">
+                            <Plus className="w-5 h-5" />
+                         </div>
+                      </div>
+                   </div>
                 </div>
-                <div>
-                  <p className="text-[10px] text-secondary font-black uppercase tracking-widest mb-1">{product.category}</p>
-                  <p className="text-sm font-semibold text-primary mb-4 truncate">{product.name}</p>
-                  <div className="flex items-center justify-between">
-                    <p className="text-lg font-bold text-primary italic opacity-80">${product.price.toFixed(2)}</p>
-                    <div className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors duration-500">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+           </div>
         </div>
       </section>
 
-      {/* Right Panel: Current Order */}
-      <aside className="w-[420px] h-full flex flex-col bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-primary/5">
-        <header className="p-8 pb-4">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="title-lg text-primary tracking-tight opacity-90 underline-offset-4 decoration-primary/10 decoration-2">Current Order</h3>
-            <div className="relative">
-              <span className="absolute -top-2 -right-2 w-5 h-5 bg-secondary text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg">{cart.length}</span>
-              <ShoppingCart className="w-6 h-6 text-primary/60" />
+      {/* Right Panel: Order Drawer */}
+      <aside className="w-[420px] bg-zinc-900 dark:bg-zinc-950 rounded-[48px] shadow-2xl overflow-hidden flex flex-col border border-zinc-800">
+         <header className="p-10 pb-6 space-y-8">
+            <div className="flex items-center justify-between">
+               <h3 className="text-2xl font-black text-white italic-elegant uppercase tracking-tighter">Current Order</h3>
+               <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-blue-400 relative">
+                  <ShoppingCart className="w-6 h-6" />
+                  {cart.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">{cart.length}</span>
+                  )}
+               </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-4 p-4 bg-surface-container-lowest rounded-xl ambient-shadow cursor-pointer hover:bg-surface transition-colors group">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <User className="w-5 h-5" strokeWidth={1.5} />
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] text-on-surface-variant font-black uppercase tracking-widest leading-none mb-1 opacity-50">Assigned Client</p>
-              <p className="text-sm font-semibold text-primary truncate leading-none">Private Collection Account</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-on-surface-variant/40 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </header>
 
-        <div className="flex-1 overflow-y-auto px-8 py-4 scrollbar-hide">
-          <div className="space-y-6">
-            {cart.map((item) => (
-              <div key={item.id} className="group flex gap-4 animate-in slide-in-from-right-4 duration-500">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-primary mb-1 underline-offset-4 group-hover:underline">{item.name}</p>
-                  <p className="text-[10px] text-on-surface-variant/50 font-bold uppercase tracking-widest italic">${item.price.toFixed(2)} unit</p>
-                </div>
-                <div className="flex flex-col items-end gap-3">
-                  <div className="flex items-center gap-3 bg-surface-container-lowest rounded-full p-1 shadow-sm border border-outline-variant/10">
-                    <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 rounded-full hover:bg-surface-container-low flex items-center justify-center text-primary transition-colors focus:outline-none">
-                      <Minus className="w-3.5 h-3.5" strokeWidth={3} />
-                    </button>
-                    <span className="text-xs font-black min-w-[1.2rem] text-center text-primary">{item.qty}</span>
-                    <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 rounded-full hover:bg-surface-container-low flex items-center justify-center text-primary transition-colors focus:outline-none">
-                      <Plus className="w-3.5 h-3.5" strokeWidth={3} />
-                    </button>
-                  </div>
-                  <button onClick={() => removeFromCart(item.id)} className="text-[10px] text-error uppercase font-black tracking-widest opacity-0 group-hover:opacity-60 hover:opacity-100 transition-all focus:outline-none flex items-center gap-1">
-                    <Trash2 className="w-3 h-3" /> Remove
-                  </button>
-                </div>
+            <div className="p-5 bg-white/5 border border-white/10 rounded-[28px] flex items-center gap-4 group cursor-pointer hover:bg-white/10 transition-all">
+               <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-400">
+                  <User className="w-6 h-6" />
+               </div>
+               <div className="flex-1">
+                  <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-0.5">Assigned Client</p>
+                  <p className="text-sm font-bold text-white uppercase tracking-tight">VIP Private Account</p>
+               </div>
+               <ChevronRight className="w-5 h-5 text-white/20 group-hover:translate-x-1 transition-transform" />
+            </div>
+         </header>
+
+         <div className="flex-1 overflow-y-auto px-10 py-6 space-y-8 no-scrollbar">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-center space-y-4">
+                 <Package className="w-12 h-12 opacity-20" />
+                 <p className="text-xs font-bold uppercase tracking-widest">Bag is currently empty</p>
               </div>
-            ))}
-          </div>
-        </div>
+            ) : (
+              cart.map((item) => (
+                <div key={item.id} className="group flex items-start gap-4">
+                   <div className="flex-1 space-y-1">
+                      <p className="text-sm font-black text-white uppercase tracking-tight">{item.name}</p>
+                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest italic">${item.price.toFixed(2)} unit</p>
+                   </div>
+                   <div className="flex flex-col items-end gap-3">
+                      <div className="flex items-center gap-4 bg-white/5 p-1.5 rounded-full border border-white/10 scale-90 origin-right">
+                         <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                         <span className="text-xs font-black text-white min-w-[1rem] text-center">{item.qty}</span>
+                         <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                      </div>
+                      <button onClick={() => removeFromCart(item.id)} className="text-[9px] font-black text-red-500/60 uppercase tracking-widest hover:text-red-500 transition-all flex items-center gap-1 opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /> Remove Item</button>
+                   </div>
+                </div>
+              ))
+            )}
+         </div>
 
-        <footer className="p-8 bg-surface-container-highest/20 space-y-6">
-          <div className="space-y-3">
-            <div className="flex justify-between text-xs font-medium text-on-surface-variant/70 uppercase tracking-widest">
-              <span>Subtotal</span>
-              <span className="text-primary font-bold">${subtotal.toFixed(2)}</span>
+         <footer className="p-10 pt-6 bg-white/5 space-y-10 border-t border-white/5">
+            <div className="space-y-4">
+               <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-[0.2em] text-white/40">
+                  <span>Subtotal Matrix</span>
+                  <span className="text-white">${subtotal.toFixed(2)}</span>
+               </div>
+               <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-[0.2em] text-white/40">
+                  <span>Atelier Fee (15%)</span>
+                  <span className="text-white">${tax.toFixed(2)}</span>
+               </div>
+               <div className="h-[1px] bg-white/10" />
+               <div className="flex justify-between items-end">
+                  <span className="text-xs font-black text-white uppercase tracking-[0.4em]">Total Commitment</span>
+                  <span className="text-3xl font-black text-white italic-elegant leading-none uppercase">${total.toFixed(2)}</span>
+               </div>
             </div>
-            <div className="flex justify-between text-xs font-medium text-on-surface-variant/70 uppercase tracking-widest">
-              <span>Tailoring Tax (8.25%)</span>
-              <span className="text-primary font-bold">${tax.toFixed(2)}</span>
-            </div>
-            <div className="h-[1px] bg-outline-variant/20 my-4" />
-            <div className="flex justify-between items-end">
-              <span className="text-sm font-black text-primary uppercase tracking-[0.25em]">Grand Total</span>
-              <span className="text-2xl font-bold text-primary italic leading-none">${total.toFixed(2)}</span>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-3 gap-3">
-             <button className="flex flex-col items-center justify-center gap-2 py-4 bg-surface-container-lowest rounded-xl hover:bg-white hover:shadow-lg transition-all text-primary group active:scale-95">
-                <Banknote className="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" strokeWidth={1} />
-                <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Cash</span>
-             </button>
-             <button className="flex flex-col items-center justify-center gap-2 py-4 bg-surface-container-lowest rounded-xl hover:bg-white hover:shadow-lg transition-all text-primary group active:scale-95">
-                <CreditCard className="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" strokeWidth={1} />
-                <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Card</span>
-             </button>
-             <button className="flex flex-col items-center justify-center gap-2 py-4 bg-surface-container-lowest rounded-xl hover:bg-white hover:shadow-lg transition-all text-primary group active:scale-95 border-2 border-primary/10 border-dashed">
-                <Smartphone className="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" strokeWidth={1} />
-                <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Split</span>
-             </button>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+               <button className="flex items-center justify-center gap-3 py-5 bg-white/5 rounded-[24px] hover:bg-white/10 transition-all group border border-white/10">
+                  <CreditCard className="w-5 h-5 text-zinc-500 group-hover:text-blue-400" />
+                  <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Card</span>
+               </button>
+               <button className="flex items-center justify-center gap-3 py-5 bg-white/5 rounded-[24px] hover:bg-white/10 transition-all group border border-white/10">
+                  <Banknote className="w-5 h-5 text-zinc-500 group-hover:text-green-500" />
+                  <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Cash</span>
+               </button>
+            </div>
 
-          <Button variant="primary" size="lg" className="w-full text-[13px] tracking-[0.4em]">Finalize & Pay</Button>
-        </footer>
+            <button 
+              disabled={cart.length === 0}
+              onClick={handleCheckout}
+              className={`w-full py-6 rounded-[32px] font-black text-xs uppercase tracking-[0.5em] shadow-2xl transition-all flex items-center justify-center gap-4
+                ${cart.length > 0 
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]' 
+                  : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+            >
+              Sign & Pay <ArrowRight className="w-5 h-5" />
+            </button>
+         </footer>
       </aside>
+
+      <Toast 
+        isVisible={showToast} 
+        message={toastMsg} 
+        onClose={() => setShowToast(false)} 
+        type="success" 
+      />
     </div>
   );
 }
