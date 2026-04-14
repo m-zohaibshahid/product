@@ -4,31 +4,21 @@ import {
   Plus, 
   Search, 
   Filter, 
-  MoreHorizontal, 
-  ArrowUpDown, 
   History, 
-  Package, 
   ArrowLeft,
   ChevronRight,
   TrendingDown,
-  TrendingUp,
   Tag,
   Warehouse,
   Printer,
-  Edit3,
   Trash2,
-  CheckCircle2,
   QrCode,
   DollarSign,
-  Box,
   Truck,
   Layers,
-  Info,
   MapPin,
   X,
   Archive as ArchiveIcon,
-  ShoppingBag,
-  FileText
 } from 'lucide-react';
 import Toast from '@/components/ui/Toast';
 
@@ -47,6 +37,8 @@ export default function InventoryPage() {
       quantity: '42.5 M', 
       status: 'In Stock', 
       category: 'Fabric',
+      construction: 'unstitched',
+      shopProductId: '1',
       price: { cost: '$32.00', retail: '$85.00', margin: '62%' },
       location: { warehouse: 'Main Atelier', rack: 'A-12', shelf: 'Top' },
       supplier: { name: 'Milan Wool Mill', contact: 'Massimo R.', leadTime: '14 Days' },
@@ -63,6 +55,8 @@ export default function InventoryPage() {
       quantity: '3 Units', 
       status: 'Low Stock', 
       category: 'Ready-to-Wear',
+      construction: 'stitched',
+      shopProductId: '3',
       price: { cost: '$18.50', retail: '$120.00', margin: '84%' },
       location: { warehouse: 'Retail Branch', rack: 'B-04', shelf: 'Front' },
       supplier: { name: 'Heritage Crafters', contact: 'Emma S.', leadTime: '7 Days' },
@@ -78,6 +72,8 @@ export default function InventoryPage() {
       quantity: '0.0 M', 
       status: 'Out of Stock', 
       category: 'Fabric',
+      construction: 'unstitched',
+      shopProductId: '12',
       price: { cost: '$24.00', retail: '$65.00', margin: '63%' },
       location: { warehouse: 'Main Atelier', rack: 'C-09', shelf: 'Middle' },
       supplier: { name: 'Belfast Linens', contact: 'Liam O.', leadTime: '21 Days' },
@@ -315,6 +311,16 @@ export default function InventoryPage() {
                        <section className="space-y-8">
                           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2 border-b border-zinc-50 dark:border-gray-500/30 pb-6"><Tag className="w-4 h-4 text-zinc-900 dark:text-white" /> Technical Matrix</h3>
                           <div className="space-y-6">
+                              <div className="flex justify-between items-center group">
+                                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors">Artisanal Architecture</span>
+                                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${selectedProduct.construction === 'unstitched' ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
+                                    {selectedProduct.construction === 'unstitched' ? 'Elite Unstitched' : 'Bespoke Stitched'}
+                                 </span>
+                              </div>
+                              <div className="flex justify-between items-center group">
+                                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors">Shop Link ID</span>
+                                 <span className="text-sm font-black text-primary underline decoration-primary/20">{selectedProduct.shopProductId || 'Not Linked'}</span>
+                              </div>
                              {Object.entries(selectedProduct.specs).map(([k, v]: any) => (
                                <div key={k} className="flex justify-between items-center group">
                                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors">{k}</span>
@@ -434,7 +440,21 @@ export default function InventoryPage() {
                        </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-6">
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Shop Architecture</label>
+                           <select className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-xs outline-none border-none dark:text-white">
+                              <option>Bespoke Stitched</option>
+                              <option>Elite Unstitched (Fabric)</option>
+                           </select>
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Shop Product ID</label>
+                           <input type="text" placeholder="e.g. 104" className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-sm outline-none border-none dark:text-white" />
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-3 gap-6">
                        <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Volume</label>
                           <input type="text" placeholder="10.0 M" className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-sm outline-none border-none dark:text-white" />
