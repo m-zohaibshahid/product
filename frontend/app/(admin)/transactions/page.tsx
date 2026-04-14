@@ -30,13 +30,13 @@ export default function TransactionsPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-12 animate-fade-in pb-20">
       {/* Header Row */}
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-100 dark:border-zinc-800 pb-10">
+      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-100 dark:border-gray-500/30 pb-10">
         <div>
           <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter italic-elegant">Master Ledger</h1>
           <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-1">Real-time settlement & transaction registry</p>
         </div>
         <div className="flex gap-4">
-           <button className="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all font-bold text-xs uppercase tracking-widest">
+           <button className="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-gray-500 text-zinc-600 dark:text-zinc-400 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all font-bold text-xs uppercase tracking-widest">
              <Download className="w-4 h-4" /> Export logs
            </button>
            <button className="bg-zinc-900 dark:bg-blue-600 text-white px-8 py-4 rounded-full font-bold flex items-center gap-2 hover:bg-black dark:hover:bg-blue-700 transition-all shadow-xl shadow-zinc-200 dark:shadow-black/20 uppercase tracking-widest text-xs">
@@ -53,12 +53,12 @@ export default function TransactionsPage() {
           { label: 'Pending Invoices', val: '22 Items', icon: Receipt, color: 'text-blue-500' },
           { label: 'Velocity Index', val: '+ 440K', icon: TrendingUp, color: 'text-zinc-900 dark:text-white' },
         ].map((stat, i) => (
-          <div key={i} className="bg-white dark:bg-zinc-900 p-8 rounded-[32px] border border-zinc-100 dark:border-zinc-800 shadow-sm hover:shadow-xl transition-all group">
+          <div key={i} className="bg-white dark:bg-gray-500 p-8 rounded-[32px] border border-zinc-100 dark:border-gray-500/30 shadow-sm hover:shadow-xl transition-all group">
              <div className="flex items-center justify-between mb-8">
-                <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all">
+                <div className="w-10 h-10 bg-zinc-50 dark:bg-gray-500 rounded-2xl flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all">
                    <stat.icon className="w-5 h-5" />
                 </div>
-                <div className="px-3 py-1 bg-zinc-50 dark:bg-zinc-800 rounded-full text-[9px] font-black uppercase tracking-widest text-zinc-400">Audited</div>
+                <div className="px-3 py-1 bg-zinc-50 dark:bg-gray-500 rounded-full text-[9px] font-black uppercase tracking-widest text-zinc-400">Audited</div>
              </div>
              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{stat.label}</p>
              <p className={`text-2xl font-black tracking-tighter ${stat.color}`}>{stat.val}</p>
@@ -67,14 +67,14 @@ export default function TransactionsPage() {
       </div>
 
       {/* Registry Table Container */}
-      <div className="bg-white dark:bg-zinc-900 rounded-[48px] border border-zinc-100 dark:border-zinc-800 shadow-xl overflow-hidden">
-         <div className="p-10 border-b border-zinc-50 dark:border-zinc-800 flex items-center justify-between gap-8">
+      <div className="bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-xl overflow-hidden">
+         <div className="p-10 border-b border-zinc-50 dark:border-gray-500/30 flex items-center justify-between gap-8">
             <div className="relative flex-1 max-w-xl">
                <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400 w-5 h-5 font-black" />
-               <input type="text" placeholder="Search by Client, ID, or Reference..." className="w-full pl-14 pr-6 py-5 bg-zinc-50 dark:bg-zinc-800 rounded-2xl border-none outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500 font-bold text-sm dark:text-white" />
+               <input type="text" placeholder="Search by Client, ID, or Reference..." className="w-full pl-14 pr-6 py-5 bg-zinc-50 dark:bg-gray-500 rounded-2xl border-none outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500 font-bold text-sm dark:text-white" />
             </div>
             <div className="flex gap-4">
-              <div className="flex bg-zinc-50 dark:bg-zinc-800 p-1.5 rounded-2xl">
+              <div className="flex bg-zinc-50 dark:bg-gray-500 p-1.5 rounded-2xl">
                 <button className="px-6 py-2.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm">Global Registry</button>
                 <button className="px-6 py-2.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Credits</button>
               </div>
@@ -83,7 +83,7 @@ export default function TransactionsPage() {
 
          <div className="overflow-x-auto">
             <table className="w-full text-left">
-               <thead className="bg-zinc-50/50 dark:bg-zinc-800/20 text-zinc-400 text-[10px] font-bold uppercase tracking-widest border-b border-zinc-50 dark:border-zinc-800">
+               <thead className="bg-zinc-50/50 dark:bg-gray-500/20 text-zinc-400 text-[10px] font-bold uppercase tracking-widest border-b border-zinc-50 dark:border-gray-500/30">
                   <tr>
                      <th className="px-10 py-6">Event Context</th>
                      <th className="px-10 py-6 text-center">Protocol</th>
@@ -116,12 +116,12 @@ export default function TransactionsPage() {
                            <p className={`text-xl font-black ${tx.type === 'Credit' ? 'text-zinc-900 dark:text-white' : 'text-green-500'}`}>{tx.amount}</p>
                         </td>
                         <td className="px-10 py-10 text-right">
-                           <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${tx.status === 'Completed' ? 'bg-zinc-900 text-white dark:bg-blue-600' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-400'}`}>
+                           <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${tx.status === 'Completed' ? 'bg-zinc-900 text-white dark:bg-blue-600' : 'bg-zinc-50 dark:bg-gray-500 text-zinc-400'}`}>
                               {tx.status}
                            </span>
                         </td>
                         <td className="px-10 py-10 text-right">
-                           <ChevronRight className="w-6 h-6 text-zinc-200 dark:text-zinc-700 group-hover:text-zinc-900 dark:group-hover:text-white transition-all transform group-hover:translate-x-2" />
+                           <ChevronRight className="w-6 h-6 text-zinc-200 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white transition-all transform group-hover:translate-x-2" />
                         </td>
                      </tr>
                   ))}
@@ -129,7 +129,7 @@ export default function TransactionsPage() {
             </table>
          </div>
 
-         <div className="p-10 border-t border-zinc-50 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/30 dark:bg-zinc-800/10">
+         <div className="p-10 border-t border-zinc-50 dark:border-gray-500/30 flex items-center justify-between bg-zinc-50/30 dark:bg-gray-500/10">
             <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">Registry Display: 1–6 of 1,240 Entries</p>
             <div className="flex gap-4">
               <button className="px-6 py-3 border border-zinc-100 dark:border-zinc-700/50 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all text-zinc-400">Prior Page</button>

@@ -55,16 +55,16 @@ export default function ReportsPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-16 animate-fade-in">
       {/* Header */}
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-zinc-100 dark:border-zinc-800 pb-12">
+      <section className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-zinc-100 dark:border-gray-500/30 pb-12">
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-zinc-100 dark:bg-gray-500 rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
             <ShieldCheck className="w-3 h-3 text-blue-500" /> Audited Financials
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter italic-elegant">Atelier Intelligence</h1>
           <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px]">Fiscal Year 2024 • Performance & Accounting Analytics</p>
         </div>
         <div className="flex gap-4">
-           <button className="flex items-center gap-2 px-6 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-2xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all font-bold text-xs uppercase tracking-widest">
+           <button className="flex items-center gap-2 px-6 py-3 bg-zinc-100 dark:bg-gray-500 text-zinc-900 dark:text-white rounded-2xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all font-bold text-xs uppercase tracking-widest">
              <Calendar className="w-4 h-4 text-zinc-400" /> Quarterly
            </button>
            <button 
@@ -84,9 +84,9 @@ export default function ReportsPage() {
           { label: 'Aquisition Cost', val: '$102.1k', change: '-4.8%', up: false, icon: Briefcase },
           { label: 'Customer LTV', val: '$4.2k', change: '+15.2%', up: true, icon: TrendingUp },
         ].map((kpi, i) => (
-          <div key={i} className="bg-white dark:bg-zinc-900 p-8 rounded-[32px] border border-zinc-100 dark:border-zinc-800 shadow-sm hover:shadow-xl transition-all group">
+          <div key={i} className="bg-white dark:bg-gray-500 p-8 rounded-[32px] border border-zinc-100 dark:border-gray-500/30 shadow-sm hover:shadow-xl transition-all group">
             <div className="flex items-center justify-between mb-6">
-               <div className="w-12 h-12 bg-zinc-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 transition-all">
+               <div className="w-12 h-12 bg-zinc-50 dark:bg-gray-500 rounded-2xl flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 transition-all">
                   <kpi.icon className="w-6 h-6 group-hover:text-white" />
                </div>
                <div className={`flex items-center gap-1 font-bold text-[10px] uppercase tracking-tighter ${kpi.up ? 'text-green-600' : 'text-red-500'}`}>
@@ -102,7 +102,7 @@ export default function ReportsPage() {
 
       {/* Primary Analytics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        <article className="lg:col-span-8 bg-white dark:bg-zinc-900 rounded-[48px] border border-zinc-100 dark:border-zinc-800 shadow-xl p-12 flex flex-col gap-10">
+        <article className="lg:col-span-8 bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-12 flex flex-col gap-10">
            <div className="flex items-center justify-between">
               <div>
                  <h2 className="text-2xl font-black text-zinc-900 dark:text-white italic-elegant uppercase tracking-tighter">Growth Velocity</h2>
@@ -186,8 +186,8 @@ export default function ReportsPage() {
       </div>
 
       {/* Audit Logs */}
-      <section className="bg-white dark:bg-zinc-900 rounded-[48px] border border-zinc-100 dark:border-zinc-800 shadow-xl overflow-hidden mt-12 pb-10">
-        <div className="p-10 border-b border-zinc-50 dark:border-zinc-800 flex items-center justify-between">
+      <section className="bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-xl overflow-hidden mt-12 pb-10">
+        <div className="p-10 border-b border-zinc-50 dark:border-gray-500/30 flex items-center justify-between">
            <div>
               <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic-elegant">Master Audit Registry</h3>
               <p className="text-zinc-400 font-medium text-xs">Immutable financial records for H2 2024.</p>
@@ -195,14 +195,14 @@ export default function ReportsPage() {
            <div className="flex gap-4">
               <div className="relative">
                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                 <input type="text" placeholder="Search logs..." className="pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold outline-none border-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500" />
+                 <input type="text" placeholder="Search logs..." className="pl-10 pr-4 py-3 bg-zinc-50 dark:bg-gray-500 rounded-xl text-xs font-bold outline-none border-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500" />
               </div>
            </div>
         </div>
 
         <div className="overflow-x-auto">
            <table className="w-full text-left">
-              <thead className="bg-zinc-50/50 dark:bg-zinc-800/20 text-zinc-400 text-[10px] font-bold uppercase tracking-[0.2em]">
+              <thead className="bg-zinc-50/50 dark:bg-gray-500/20 text-zinc-400 text-[10px] font-bold uppercase tracking-[0.2em]">
                  <tr>
                     <th className="px-10 py-6">Transaction Ref</th>
                     <th className="px-10 py-6">Ledger Class</th>
@@ -224,13 +224,13 @@ export default function ReportsPage() {
                           <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mt-1">{item.date}</p>
                        </td>
                        <td className="px-10 py-8">
-                          <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">{item.cat}</p>
+                          <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{item.cat}</p>
                        </td>
                        <td className="px-10 py-8 text-right">
                           <span className={`text-xl font-black ${item.amt.startsWith('-') ? 'text-red-500' : 'text-zinc-900 dark:text-white'}`}>{item.amt}</span>
                        </td>
                        <td className="px-10 py-8 text-center">
-                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${item.status === 'Verified' ? 'bg-zinc-900 text-white dark:bg-blue-600' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>
+                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${item.status === 'Verified' ? 'bg-zinc-900 text-white dark:bg-blue-600' : 'bg-zinc-100 dark:bg-gray-500 text-zinc-400'}`}>
                              {item.status === 'Verified' && <CheckCircle2 className="w-3 h-3" />}
                              {item.status}
                           </div>

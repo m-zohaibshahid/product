@@ -9,7 +9,7 @@ export default function ShopLayout({
   return (
     <div className="min-h-screen bg-white text-zinc-900 flex flex-col">
       {/* Premium Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-zinc-100 px-6 py-4">
+      <header className="sticky top-0 z-50 bg-white/90 dark:bg-gray-500/90 backdrop-blur-sm border-b border-zinc-100 dark:border-gray-500 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <Link href="/" className="text-xl font-bold tracking-tighter">
             ATELIER

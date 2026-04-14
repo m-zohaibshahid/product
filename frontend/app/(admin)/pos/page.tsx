@@ -84,9 +84,9 @@ export default function POSPage() {
              <div className="flex items-center gap-4">
                 <div className="relative">
                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <input type="text" placeholder="Search product or SKU..." className="pl-10 pr-6 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold outline-none border-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500 w-64 transition-all" />
+                   <input type="text" placeholder="Search product or SKU..." className="pl-10 pr-6 py-3 bg-zinc-50 dark:bg-gray-500 rounded-xl text-xs font-bold outline-none border-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white w-64 transition-all dark:text-white" />
                 </div>
-                <button className="p-3 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all">
+                <button className="p-3 bg-white dark:bg-gray-500 rounded-xl border border-zinc-100 dark:border-gray-500 hover:bg-zinc-50 dark:hover:bg-gray-500/80 transition-all">
                   <Info className="w-5 h-5 text-zinc-400" />
                 </button>
              </div>
@@ -100,7 +100,7 @@ export default function POSPage() {
                   className={`px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all
                     ${selectedCategory === cat 
                       ? 'bg-zinc-900 text-white dark:bg-blue-600 shadow-xl shadow-zinc-200 dark:shadow-black/30' 
-                      : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'}`}
+                      : 'bg-zinc-50 dark:bg-gray-500 text-zinc-400 dark:text-white/60 hover:bg-zinc-100 dark:hover:bg-gray-500'}`}
                 >
                   {cat}
                 </button>
@@ -114,12 +114,12 @@ export default function POSPage() {
                 <div 
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  className="group bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-100 dark:border-zinc-800 p-6 cursor-pointer hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 hover:-translate-y-2 active:scale-95"
+                  className="group bg-white dark:bg-gray-500 rounded-[32px] border border-zinc-100 dark:border-gray-500 p-6 cursor-pointer hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 hover:-translate-y-2 active:scale-95"
                 >
                    <div className="aspect-square rounded-[24px] overflow-hidden mb-6 relative">
                       <img src={product.image} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt={product.name} />
                       <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="absolute top-4 right-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-tighter text-zinc-900 dark:text-white border border-white/20">
+                      <div className="absolute top-4 right-4 bg-white/90 dark:bg-gray-500/90 backdrop-blur-md px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-tighter text-zinc-900 dark:text-white border border-white/20">
                          {product.sku}
                       </div>
                    </div>
@@ -128,9 +128,9 @@ export default function POSPage() {
                          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5"><Tag className="w-3 h-3" /> {product.category}</p>
                          <h3 className="text-lg font-black text-zinc-900 dark:text-white tracking-tighter group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors uppercase">{product.name}</h3>
                       </div>
-                      <div className="flex items-center justify-between pt-4 border-t border-zinc-50 dark:border-zinc-800">
+                      <div className="flex items-center justify-between pt-4 border-t border-zinc-50 dark:border-gray-500">
                          <span className="text-xl font-bold text-zinc-900 dark:text-white">${product.price.toFixed(2)}</span>
-                         <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:rotate-90">
+                         <div className="w-10 h-10 bg-zinc-50 dark:bg-gray-500 rounded-full flex items-center justify-center text-zinc-400 dark:text-white group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all transform group-hover:rotate-90">
                             <Plus className="w-5 h-5" />
                          </div>
                       </div>
@@ -142,11 +142,11 @@ export default function POSPage() {
       </section>
 
       {/* Right Panel: Order Drawer */}
-      <aside className="w-[420px] bg-zinc-900 dark:bg-zinc-950 rounded-[48px] shadow-2xl overflow-hidden flex flex-col border border-zinc-800">
+      <aside className="w-[420px] bg-white dark:bg-gray-500 rounded-[48px] shadow-2xl overflow-hidden flex flex-col border border-zinc-100 dark:border-gray-500">
          <header className="p-10 pb-6 space-y-8">
             <div className="flex items-center justify-between">
-               <h3 className="text-2xl font-black text-white italic-elegant uppercase tracking-tighter">Current Order</h3>
-               <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-blue-400 relative">
+               <h3 className="text-2xl font-black text-zinc-900 dark:text-white italic-elegant uppercase tracking-tighter">Current Order</h3>
+               <div className="w-12 h-12 bg-zinc-100 dark:bg-gray-500 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 relative">
                   <ShoppingCart className="w-6 h-6" />
                   {cart.length > 0 && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">{cart.length}</span>
@@ -154,15 +154,15 @@ export default function POSPage() {
                </div>
             </div>
 
-            <div className="p-5 bg-white/5 border border-white/10 rounded-[28px] flex items-center gap-4 group cursor-pointer hover:bg-white/10 transition-all">
-               <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-400">
+            <div className="p-5 bg-zinc-50 dark:bg-gray-500 border border-zinc-100 dark:border-gray-500/30 rounded-[28px] flex items-center gap-4 group cursor-pointer hover:bg-zinc-100 dark:hover:bg-gray-500/50 transition-all">
+               <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <User className="w-6 h-6" />
                </div>
                <div className="flex-1">
-                  <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-0.5">Assigned Client</p>
-                  <p className="text-sm font-bold text-white uppercase tracking-tight">VIP Private Account</p>
+                  <p className="text-[10px] font-bold text-zinc-400 dark:text-white/40 uppercase tracking-widest mb-0.5">Assigned Client</p>
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-tight">VIP Private Account</p>
                </div>
-               <ChevronRight className="w-5 h-5 text-white/20 group-hover:translate-x-1 transition-transform" />
+               <ChevronRight className="w-5 h-5 text-zinc-300 dark:text-white/20 group-hover:translate-x-1 transition-transform" />
             </div>
          </header>
 
@@ -176,14 +176,14 @@ export default function POSPage() {
               cart.map((item) => (
                 <div key={item.id} className="group flex items-start gap-4">
                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-black text-white uppercase tracking-tight">{item.name}</p>
-                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest italic">${item.price.toFixed(2)} unit</p>
+                      <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{item.name}</p>
+                      <p className="text-[10px] font-bold text-zinc-500 dark:text-white/40 uppercase tracking-widest italic">${item.price.toFixed(2)} unit</p>
                    </div>
                    <div className="flex flex-col items-end gap-3">
-                      <div className="flex items-center gap-4 bg-white/5 p-1.5 rounded-full border border-white/10 scale-90 origin-right">
-                         <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
+                      <div className="flex items-center gap-4 bg-gray-500/20 p-1.5 rounded-full border border-gray-500/30 scale-90 origin-right">
+                         <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded-full hover:bg-gray-500/30 flex items-center justify-center text-white transition-all"><Minus className="w-3.5 h-3.5" /></button>
                          <span className="text-xs font-black text-white min-w-[1rem] text-center">{item.qty}</span>
-                         <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
+                         <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded-full hover:bg-gray-500/30 flex items-center justify-center text-white transition-all"><Plus className="w-3.5 h-3.5" /></button>
                       </div>
                       <button onClick={() => removeFromCart(item.id)} className="text-[9px] font-black text-red-500/60 uppercase tracking-widest hover:text-red-500 transition-all flex items-center gap-1 opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /> Remove Item</button>
                    </div>
@@ -192,7 +192,7 @@ export default function POSPage() {
             )}
          </div>
 
-         <footer className="p-10 pt-6 bg-white/5 space-y-10 border-t border-white/5">
+         <footer className="p-10 pt-6 bg-gray-500/20 space-y-10 border-t border-gray-500/20">
             <div className="space-y-4">
                <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-[0.2em] text-white/40">
                   <span>Subtotal Matrix</span>
@@ -202,19 +202,19 @@ export default function POSPage() {
                   <span>Atelier Fee (15%)</span>
                   <span className="text-white">${tax.toFixed(2)}</span>
                </div>
-               <div className="h-[1px] bg-white/10" />
+               <div className="h-[1px] bg-gray-500/30" />
                <div className="flex justify-between items-end">
-                  <span className="text-xs font-black text-white uppercase tracking-[0.4em]">Total Commitment</span>
-                  <span className="text-3xl font-black text-white italic-elegant leading-none uppercase">${total.toFixed(2)}</span>
+                  <span className="text-xs font-black text-zinc-900 dark:text-white uppercase tracking-[0.4em]">Total Commitment</span>
+                  <span className="text-3xl font-black text-zinc-900 dark:text-white italic-elegant leading-none uppercase">${total.toFixed(2)}</span>
                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-               <button className="flex items-center justify-center gap-3 py-5 bg-white/5 rounded-[24px] hover:bg-white/10 transition-all group border border-white/10">
+               <button className="flex items-center justify-center gap-3 py-5 bg-gray-500/20 rounded-[24px] hover:bg-gray-500/30 transition-all group border border-gray-500/30">
                   <CreditCard className="w-5 h-5 text-zinc-500 group-hover:text-blue-400" />
                   <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Card</span>
                </button>
-               <button className="flex items-center justify-center gap-3 py-5 bg-white/5 rounded-[24px] hover:bg-white/10 transition-all group border border-white/10">
+               <button className="flex items-center justify-center gap-3 py-5 bg-gray-500/20 rounded-[24px] hover:bg-gray-500/30 transition-all group border border-gray-500/30">
                   <Banknote className="w-5 h-5 text-zinc-500 group-hover:text-green-500" />
                   <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Cash</span>
                </button>
@@ -226,7 +226,7 @@ export default function POSPage() {
               className={`w-full py-6 rounded-[32px] font-black text-xs uppercase tracking-[0.5em] shadow-2xl transition-all flex items-center justify-center gap-4
                 ${cart.length > 0 
                   ? 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]' 
-                  : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+                  : 'bg-gray-500/20 text-white/20 cursor-not-allowed'}`}
             >
               Sign & Pay <ArrowRight className="w-5 h-5" />
             </button>
