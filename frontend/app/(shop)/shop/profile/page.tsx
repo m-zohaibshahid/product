@@ -18,7 +18,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   Trash2,
-  Plus
+  Plus,
+  Store
 } from 'lucide-react';
 
 export default function ProfilePage() {
