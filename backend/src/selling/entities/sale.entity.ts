@@ -4,7 +4,7 @@ import { SaleItem } from './sale-item.entity';
 
 @Entity('sales')
 export class Sale {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn({ name: 'sale_id' })
   id: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
@@ -31,6 +31,6 @@ export class Sale {
   @OneToMany(() => SaleItem, (item) => item.sale)
   items: SaleItem[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

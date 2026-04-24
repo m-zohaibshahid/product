@@ -39,14 +39,17 @@ const baseQueryWithLogging: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQu
 export const inventoryApi = createApi({
   reducerPath: 'inventoryApi',
   baseQuery: baseQueryWithLogging,
+  tagTypes: ['InventoryDashboard', 'InventoryAlerts', 'Movements', 'Products', 'Variants', 'StockReport', 'ArchivedVariants'],
   endpoints: (builder) => ({
     getDashboard: builder.query<Record<string, unknown>, void>({
       query: () => ({ url: '/inventory/dashboard', params: { lowThreshold: 5 } }),
       transformResponse: (response: { data?: Record<string, unknown> }) => response?.data ?? {},
+      providesTags: ['InventoryDashboard'],
     }),
     getMovementsSummary: builder.query<Record<string, unknown>, void>({
       query: () => ({ url: '/inventory/movements/summary' }),
       transformResponse: (response: { data?: Record<string, unknown> }) => response?.data ?? {},
+      providesTags: ['Movements'],
     }),
     getAlerts: builder.query<{ critical: Record<string, unknown>[]; warning: Record<string, unknown>[] }, void>({
       query: () => ({
@@ -57,6 +60,7 @@ export const inventoryApi = createApi({
         critical: response?.data?.critical ?? [],
         warning: response?.data?.warning ?? [],
       }),
+      providesTags: ['InventoryAlerts'],
     }),
     getVariants: builder.query<Record<string, unknown>[], void>({
       query: () => ({
@@ -64,16 +68,18 @@ export const inventoryApi = createApi({
         params: { page: 1, limit: 100, sortBy: 'createdAt', sortOrder: 'DESC' },
       }),
       transformResponse: (response: { data?: Record<string, unknown>[] }) => response?.data ?? [],
+      providesTags: ['Variants'],
     }),
     getProducts: builder.query<Record<string, unknown>[], void>({
       query: () => ({
         url: '/products',
-        params: { page: 1, limit: 200 },
+        params: { page: 1, limit: 100 },
       }),
       transformResponse: (response: { data?: Record<string, unknown>[] } | Record<string, unknown>) => {
         const r = response as any;
         return r?.data?.data ?? r?.data ?? [];
       },
+      providesTags: ['Products'],
     }),
     getStockReport: builder.query<Record<string, unknown>[], void>({
       query: () => ({
@@ -81,16 +87,20 @@ export const inventoryApi = createApi({
         params: { page: 1, limit: 50, sortBy: 'createdAt', sortOrder: 'DESC' },
       }),
       transformResponse: (response: { data?: Record<string, unknown>[] }) => response?.data ?? [],
+      providesTags: ['StockReport'],
     }),
     getArchivedVariants: builder.query<Record<string, unknown>[], void>({
       query: () => ({ url: '/variants/archived' }),
       transformResponse: (response: { data?: Record<string, unknown>[] }) => response?.data ?? [],
+      providesTags: ['ArchivedVariants'],
     }),
     createProduct: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
       query: (payload) => ({ url: '/products', method: 'POST', body: payload }),
+      invalidatesTags: ['Products'],
     }),
     createVariant: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
       query: (payload) => ({ url: '/variants', method: 'POST', body: payload }),
+      invalidatesTags: ['Variants', 'StockReport', 'InventoryDashboard', 'InventoryAlerts'],
     }),
     uploadVariantPhoto: builder.mutation<
       Record<string, unknown>,
@@ -101,6 +111,7 @@ export const inventoryApi = createApi({
         method: 'POST',
         body: { imageUrl },
       }),
+      invalidatesTags: ['Variants'],
     }),
     updateVariantColor: builder.mutation<
       Record<string, unknown>,
@@ -111,12 +122,19 @@ export const inventoryApi = createApi({
         method: 'PATCH',
         body,
       }),
+      invalidatesTags: ['Variants'],
     }),
     archiveVariant: builder.mutation<Record<string, unknown>, number>({
       query: (id) => ({ url: `/variants/${id}/archive`, method: 'PATCH' }),
+      invalidatesTags: ['Variants', 'ArchivedVariants', 'InventoryAlerts', 'InventoryDashboard'],
     }),
     restoreVariant: builder.mutation<Record<string, unknown>, number>({
       query: (id) => ({ url: `/variants/${id}/restore`, method: 'PATCH' }),
+      invalidatesTags: ['Variants', 'ArchivedVariants', 'InventoryAlerts', 'InventoryDashboard'],
+    }),
+    processSale: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
+      query: (payload) => ({ url: '/selling/process', method: 'POST', body: payload }),
+      invalidatesTags: ['StockReport', 'Variants', 'InventoryDashboard', 'InventoryAlerts', 'Movements'],
     }),
   }),
 });
@@ -135,4 +153,5 @@ export const {
   useUpdateVariantColorMutation,
   useArchiveVariantMutation,
   useRestoreVariantMutation,
+  useProcessSaleMutation,
 } = inventoryApi;

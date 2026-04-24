@@ -1,14 +1,24 @@
-import { IsUUID, IsInt, IsOptional, IsString, IsNotEmpty, IsArray, ValidateNested, Min } from 'class-validator';
+import {
+  IsUUID,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsNotEmpty,
+  IsArray,
+  ValidateNested,
+  Min,
+  IsNumberString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SaleItemDto {
-  @IsUUID()
   @IsNotEmpty()
+  @IsNumberString()
   variant_id: string;
 
   @IsUUID()
-  @IsNotEmpty()
-  location_id: string;
+  @IsOptional()
+  location_id?: string;
 
   @IsInt()
   @Min(1)
@@ -33,13 +43,13 @@ export class CreateSaleDto {
   @IsOptional()
   customer_name?: string;
 
-  @IsUUID()
+  @IsNumberString()
   @IsOptional()
   customer_id?: string;
 
   @IsString()
   @IsOptional()
-  payment_mode: 'CASH' | 'CREDIT' | 'PARTIAL' = 'CASH';
+  payment_mode: 'CASH' | 'ONLINE' | 'LEDGER' | 'CREDIT' | 'PARTIAL' = 'CASH';
 
   @IsOptional()
   amount_paid?: number;

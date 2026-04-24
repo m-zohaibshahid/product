@@ -32,44 +32,55 @@ export class SellingService {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
       let totalAmount = 0;
       let totalDiscount = 0;
-
-      // 1. Create Sale Header (Initial Save to get ID)
-      const sale = manager.create(Sale, {
-        customer_name: dto.customer_name,
-        customer_id: dto.customer_id,
-        payment_mode: dto.payment_mode,
-        amount_paid: dto.amount_paid || 0,
-        created_by: userId,
-      });
-      const savedSale = await manager.save(sale);
-
       const itemsResponse: any[] = [];
-
       for (const itemDto of dto.items) {
-        // 2. Lock Variant Row for each item
-        const variant = await manager.findOne(Variant, {
-          where: { id: itemDto.variant_id },
-          relations: ['product'],
-          lock: { mode: 'pessimistic_write' },
-        });
-
+        const variantId = Number(itemDto.variant_id);
+        if (!Number.isFinite(variantId)) {
+          throw new BadRequestException(`Invalid variant_id: ${itemDto.variant_id}`);
+        }
+        const variantRows = await manager.query(
+          `
+            SELECT variant_id, sku, selling_price, mrp, COALESCE(min_stock_level, 0) AS stock_cache
+            FROM product_variants
+            WHERE variant_id = $1
+          `,
+          [variantId],
+        );
+        const variant = variantRows?.[0];
         if (!variant) throw new NotFoundException(`Variant ${itemDto.variant_id} not found`);
 
-        // 3. Stock Check
-        const lastEntry = await manager.findOne(StockLedger, {
-          where: { variant_id: itemDto.variant_id, location_id: itemDto.location_id },
-          order: { createdAt: 'DESC' },
-        });
-
-        const currentBalance = lastEntry ? lastEntry.current_balance : 0;
-        if (currentBalance < itemDto.quantity) {
+        const resolvedLocationRows = itemDto.location_id
+          ? await manager.query(
+              `
+                SELECT stock_id, location_id, quantity_on_hand
+                FROM stock
+                WHERE variant_id = $1 AND location_id = $2
+                LIMIT 1
+              `,
+              [variantId, Number(itemDto.location_id)],
+            )
+          : await manager.query(
+              `
+                SELECT stock_id, location_id, quantity_on_hand
+                FROM stock
+                WHERE variant_id = $1
+                ORDER BY quantity_on_hand DESC, stock_id ASC
+                LIMIT 1
+              `,
+              [variantId],
+            );
+        const qty = Number(itemDto.quantity || 0);
+        const stockRow = resolvedLocationRows?.[0] ?? null;
+        const currentBalance = stockRow
+          ? Number(stockRow.quantity_on_hand || 0)
+          : Number(variant.stock_cache || 0);
+        if (currentBalance < qty) {
           throw new BadRequestException(
-            `Insufficient stock for ${variant.sku} at selected location. Available: ${currentBalance}`,
+            `Insufficient stock for ${variant.sku}. Available: ${currentBalance}`,
           );
         }
 
-        // 4. Financial Calculations per item
-        const basePrice = Number(variant.price || 0);
+        const basePrice = Number(variant.selling_price ?? variant.mrp ?? 0);
         let unitPrice = itemDto.unit_price;
 
         if (unitPrice === undefined || unitPrice === null) {
@@ -77,86 +88,168 @@ export class SellingService {
           unitPrice = basePrice * (1 - discountVal / 100);
         }
 
-        const itemRevenue = unitPrice * itemDto.quantity;
-        const itemDiscountAmount = (basePrice * itemDto.quantity) - itemRevenue;
+        const itemRevenue = unitPrice * qty;
+        const itemDiscountAmount = (basePrice * qty) - itemRevenue;
         const finalDiscountPercent = ((basePrice - unitPrice) / basePrice) * 100;
 
         totalAmount += itemRevenue;
         totalDiscount += itemDiscountAmount;
 
-        // 5. Create Sale Item Record
-        const saleItem = manager.create(SaleItem, {
-          sale_id: savedSale.id,
-          variant_id: itemDto.variant_id,
-          location_id: itemDto.location_id,
-          quantity: itemDto.quantity,
-          unit_price: unitPrice,
-          base_price: basePrice,
-          discount_percent: finalDiscountPercent || 0,
-          total_item_revenue: itemRevenue,
-        });
-        await manager.save(saleItem);
-
-        // 6. Create Inventory Ledger Entry
-        const newBalance = currentBalance - itemDto.quantity;
-        const ledgerEntry = manager.create(StockLedger, {
-          variant_id: itemDto.variant_id,
-          location_id: itemDto.location_id,
-          quantity: -itemDto.quantity,
-          current_balance: newBalance,
-          movement_type: StockMovementType.SALE,
-          remarks: dto.remarks || `Sold via Sale ID: ${savedSale.id}`,
-          reference_id: dto.reference_id || savedSale.id,
-          created_by: userId,
-        });
-        await manager.save(ledgerEntry);
-
-        // 7. Update Variant Stock Cache
-        variant.stock = (variant.stock || 0) - itemDto.quantity;
-        await manager.save(variant);
-
         itemsResponse.push({
           sku: variant.sku,
-          quantity: itemDto.quantity,
+          quantity: qty,
           unit_price: unitPrice,
           total: itemRevenue,
+          variant_id: variantId,
+          stock_id: stockRow ? Number(stockRow.stock_id) : null,
+          location_id: stockRow ? Number(stockRow.location_id) : null,
+          discount_amount: itemDiscountAmount,
+          discount_percent: finalDiscountPercent || 0,
         });
       }
 
-      // 8. Update Sale Header with totals
-      savedSale.total_amount = totalAmount;
-      savedSale.total_discount = totalDiscount;
-      await manager.save(savedSale);
+      const numericUserId = Number(userId);
+      let createdBy = Number.isFinite(numericUserId) && numericUserId > 0 ? numericUserId : null;
+      if (!createdBy) {
+        const userRows = await manager.query(`SELECT user_id FROM users ORDER BY user_id ASC LIMIT 1`);
+        createdBy = Number(userRows?.[0]?.user_id) || null;
+      }
+      if (!createdBy) {
+        throw new BadRequestException('No valid creator user found for sale entry.');
+      }
+      const isLedgerMode = dto.payment_mode === 'LEDGER';
+      if (isLedgerMode && !dto.customer_id) {
+        throw new BadRequestException('customer_id is required when payment mode is LEDGER.');
+      }
+      const numericCustomerId = Number(dto.customer_id);
+      let customerIdValue = Number.isFinite(numericCustomerId) ? numericCustomerId : null;
+      if (isLedgerMode) {
+        if (!customerIdValue) {
+          throw new BadRequestException('Valid ledger customer ID is required.');
+        }
+        const customerRows = await manager.query(
+          `SELECT customer_id FROM customers WHERE customer_id = $1 LIMIT 1`,
+          [customerIdValue],
+        );
+        if (!customerRows?.length) {
+          throw new BadRequestException(`Ledger customer ID ${customerIdValue} does not exist.`);
+        }
+      } else {
+        customerIdValue = null;
+      }
+      const amountPaid = isLedgerMode ? 0 : Number(dto.amount_paid || 0);
+      const paymentStatus = isLedgerMode ? 'unpaid' : amountPaid >= totalAmount ? 'paid' : amountPaid > 0 ? 'partial' : 'unpaid';
+      const invoiceNumber = `INV-${Date.now()}`;
+      const primaryLocationId =
+        Number(itemsResponse?.[0]?.location_id) ||
+        Number((await manager.query(`SELECT location_id FROM stock ORDER BY stock_id ASC LIMIT 1`))?.[0]?.location_id) ||
+        Number((await manager.query(`SELECT location_id FROM locations ORDER BY location_id ASC LIMIT 1`))?.[0]?.location_id) ||
+        null;
+      if (!primaryLocationId) {
+        throw new BadRequestException('No valid location found for sale entry.');
+      }
 
-      // 9. Customer Khata Integration (NEW)
-      if (dto.customer_id) {
-        // A. Add DEBIT for the full sale amount
-        await this.leadgerService.addKhataEntry(manager, dto.customer_id, totalAmount, TransactionType.DEBIT, {
-          saleId: savedSale.id,
-          remarks: `Sale Order: ${savedSale.id}`,
-          userId,
-        });
+      const saleInsertRows = await manager.query(
+        `
+          INSERT INTO sales (
+            invoice_number,
+            sale_date,
+            location_id,
+            customer_id,
+            subtotal_amount,
+            discount_amount,
+            tax_amount,
+            total_amount,
+            payment_status,
+            created_by
+          )
+          VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, 0, $6, $7, $8)
+          RETURNING sale_id
+        `,
+        [
+          invoiceNumber,
+          primaryLocationId,
+          customerIdValue,
+          Number((totalAmount + totalDiscount).toFixed(2)),
+          Number(totalDiscount.toFixed(2)),
+          Number(totalAmount.toFixed(2)),
+          paymentStatus,
+          createdBy,
+        ],
+      );
+      const savedSaleId = Number(saleInsertRows?.[0]?.sale_id);
+      if (!savedSaleId) {
+        throw new BadRequestException('Failed to create sale record.');
+      }
 
-        // B. If there's an immediate payment (PARTIAL or CASH), add a CREDIT entry
-        const cashPaid = Number(dto.amount_paid || 0);
-        if (cashPaid > 0) {
-          await this.leadgerService.recordPayment({
-            customer_id: dto.customer_id,
-            amount: cashPaid,
-            payment_mode: PaymentMode.CASH, 
-            remarks: `Upfront payment for Sale: ${savedSale.id}`,
-          }, userId, manager);
+      for (const item of itemsResponse) {
+        await manager.query(
+          `
+            INSERT INTO sale_lines (sale_id, variant_id, quantity, unit_price, discount, tax_rate)
+            VALUES ($1, $2, $3, $4, $5, 0)
+          `,
+          [
+            savedSaleId,
+            Number(item.variant_id),
+            Number(item.quantity),
+            Number(item.unit_price),
+            Number(item.discount_amount || 0),
+          ],
+        );
+        if (item.stock_id) {
+          await manager.query(
+            `
+              UPDATE stock
+              SET quantity_on_hand = quantity_on_hand - $1, last_updated_at = NOW()
+              WHERE stock_id = $2
+            `,
+            [Number(item.quantity), Number(item.stock_id)],
+          );
+        }
+        await manager.query(
+          `
+            UPDATE product_variants
+            SET min_stock_level = GREATEST(COALESCE(min_stock_level, 0) - $1, 0), updated_at = NOW()
+            WHERE variant_id = $2
+          `,
+          [Number(item.quantity), Number(item.variant_id)],
+        );
+      }
+
+      // Ledger mode: record khata debit and optional payment entry.
+      if (isLedgerMode && dto.customer_id) {
+        const parsedCustomer = Number(dto.customer_id);
+        if (Number.isFinite(parsedCustomer)) {
+          await this.leadgerService.addKhataEntry(manager, String(parsedCustomer), totalAmount, TransactionType.DEBIT, {
+            saleId: String(savedSaleId),
+            remarks: `Sale Order: ${savedSaleId}`,
+            userId,
+          });
+
+          const cashPaid = Number(dto.amount_paid || 0);
+          if (cashPaid > 0) {
+            await this.leadgerService.recordPayment(
+              {
+                customer_id: String(parsedCustomer),
+                amount: cashPaid,
+                payment_mode: PaymentMode.CASH,
+                remarks: `Upfront payment for Sale: ${savedSaleId}`,
+              },
+              userId,
+              manager,
+            );
+          }
         }
       }
 
       return {
-        sale_id: savedSale.id,
-        customer: savedSale.customer_name,
+        sale_id: savedSaleId,
+        customer: dto.customer_name || null,
         total_amount: totalAmount,
         total_discount: totalDiscount,
         payment_mode: dto.payment_mode,
-        amount_paid: dto.amount_paid || 0,
-        items: itemsResponse,
+        amount_paid: amountPaid,
+        items: itemsResponse.map(({ stock_id, discount_amount, ...rest }) => rest),
       };
     });
   }

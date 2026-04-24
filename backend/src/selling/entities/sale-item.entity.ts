@@ -5,7 +5,7 @@ import { StockLocation } from '../../stock/entities/stock-location.entity';
 
 @Entity('sale_items')
 export class SaleItem {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn({ name: 'sale_item_id' })
   id: string;
 
   @Column()

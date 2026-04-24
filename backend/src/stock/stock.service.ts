@@ -219,7 +219,46 @@ export class StockService {
       values,
     );
 
-    let locations = await this.locationRepo.find();
+    const regClassRows = await this.dataSource.query(
+      `
+        SELECT
+          to_regclass('public.stock_locations') AS locations_table,
+          to_regclass('public.stock_location') AS location_table,
+          to_regclass('public.stock_ledger') AS ledger_table,
+          to_regclass('public.stock_ledgers') AS ledgers_table
+      `,
+    );
+    const tableHints = regClassRows?.[0] ?? {};
+    const locationTableName = tableHints.locations_table || tableHints.location_table || null;
+    const ledgerTableName = tableHints.ledger_table || tableHints.ledgers_table || null;
+
+    let locations: Array<{ id: string; name: string }> = [];
+    if (locationTableName) {
+      const locationRows = await this.dataSource.query(
+        `
+          SELECT id::text AS id, name
+          FROM ${locationTableName}
+        `,
+      );
+      locations = locationRows.map((row: { id: string; name: string }) => ({
+        id: String(row.id),
+        name: String(row.name || row.id),
+      }));
+    } else if (ledgerTableName) {
+      // Legacy DB fallback: if no location master table, infer locations from ledger.
+      const locationRows = await this.dataSource.query(
+        `
+          SELECT DISTINCT l.location_id::text AS location_id
+          FROM ${ledgerTableName} l
+          WHERE l.location_id IS NOT NULL
+        `,
+      );
+      locations = locationRows.map((row: { location_id: string }) => ({
+        id: String(row.location_id),
+        name: `Location ${row.location_id}`,
+      }));
+    }
+
     if (query.location_id) {
       locations = locations.filter((location) => location.id === query.location_id);
     }
@@ -228,16 +267,27 @@ export class StockService {
     const locationIds = locations.map((location) => location.id);
 
     const balancesByKey = new Map<string, number>();
-    if (variantIds.length > 0 && locationIds.length > 0) {
-      const ledgers = await this.ledgerRepo
-        .createQueryBuilder('l')
-        .select(['l.variant_id AS variant_id', 'l.location_id AS location_id', 'l.current_balance AS current_balance'])
-        .where('l.variant_id IN (:...variantIds)', { variantIds })
-        .andWhere('l.location_id IN (:...locationIds)', { locationIds })
-        .orderBy('l.variant_id', 'ASC')
-        .addOrderBy('l.location_id', 'ASC')
-        .addOrderBy('l.createdAt', 'DESC')
-        .getRawMany();
+    if (variantIds.length > 0 && locationIds.length > 0 && ledgerTableName) {
+      const ledgers = await this.dataSource.query(
+        `
+          SELECT latest.variant_id, latest.location_id, latest.current_balance
+          FROM (
+            SELECT
+              l.variant_id,
+              l.location_id,
+              l.current_balance,
+              ROW_NUMBER() OVER (
+                PARTITION BY l.variant_id, l.location_id
+                ORDER BY l.id DESC
+              ) AS rn
+            FROM ${ledgerTableName} l
+            WHERE l.variant_id::int = ANY($1::int[])
+              AND l.location_id::text = ANY($2::text[])
+          ) latest
+          WHERE latest.rn = 1
+        `,
+        [variantIds, locationIds],
+      );
 
       const seen = new Set<string>();
       for (const row of ledgers) {
