@@ -17,6 +17,15 @@ export class Sale {
   customer_name: string;
 
   @Column({ nullable: true })
+  customer_id: string;
+
+  @Column({ default: 'CASH' })
+  payment_mode: string; // CASH, CREDIT, PARTIAL
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  amount_paid: number;
+
+  @Column({ nullable: true })
   created_by: string; // User UUID
 
   @OneToMany(() => SaleItem, (item) => item.sale)

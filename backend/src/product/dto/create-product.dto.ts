@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsUUID, IsEnum, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, MinLength, MaxLength, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ProductStatus, FabricType } from '../enum';
 
 export class CreateProductDto {
@@ -14,11 +15,23 @@ export class CreateProductDto {
   @IsOptional()
   description?: string;
 
-  @IsUUID()
-  brand_id: string;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  brand_id?: number;
 
-  @IsUUID()
-  category_id: string;
+  @IsString()
+  @IsOptional()
+  brand?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  category_id?: number;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
 
   @IsEnum(FabricType)
   @IsOptional()

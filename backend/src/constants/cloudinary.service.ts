@@ -12,14 +12,22 @@ export class CloudinaryService {
     });
   }
 
-  async getDominantColors(imageUrl: string) {
+  async uploadImageAndExtractColors(imageUrl: string) {
     try {
       const result = await cloudinary.uploader.upload(imageUrl, {
         colors: true,
       });
-      return result.colors;
+      return {
+        secureUrl: result.secure_url,
+        colors: result.colors,
+      };
     } catch (error) {
       throw error;
     }
+  }
+
+  async getDominantColors(imageUrl: string) {
+    const result = await this.uploadImageAndExtractColors(imageUrl);
+    return result.colors;
   }
 }

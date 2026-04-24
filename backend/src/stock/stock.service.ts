@@ -6,6 +6,7 @@ import { StockLedger } from './entities/stock-ledger.entity';
 import { Variant } from '../variants/entities/variant.entity';
 import { AdjustStockDto, TransferStockDto } from './dto/stock-operations.dto';
 import { StockMovementType } from './entities/stock.enums';
+import { StockReportQueryDto, StockReportSortBy } from './dto/stock-report-query.dto';
 
 @Injectable()
 export class StockService {
@@ -151,52 +152,163 @@ export class StockService {
     };
   }
 
-  async getWideInventoryReport() {
-    // This requires an aggregation of stock across locations for each variant
-    const variants = await this.variantRepo.find({ relations: ['product'] });
-    const locations = await this.locationRepo.find();
+  async getWideInventoryReport(query: StockReportQueryDto = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const lowThreshold = query.low_threshold ?? 5;
+    const skip = (page - 1) * limit;
+    const conditions: string[] = ['1=1'];
+    const values: Array<string | number> = [];
+    const pushParam = (value: string | number) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
+    if (query.search?.trim()) {
+      const param = pushParam(`%${query.search.trim()}%`);
+      conditions.push(`(pv.sku ILIKE ${param} OR p.name ILIKE ${param})`);
+    }
+    if (query.brand_id) {
+      conditions.push(`p.brand_id = ${pushParam(query.brand_id)}`);
+    }
+    if (query.category_id) {
+      conditions.push(`p.category_id = ${pushParam(query.category_id)}`);
+    }
+    if (query.low_only === 'true') {
+      conditions.push(`COALESCE(pv.min_stock_level, 0) <= ${pushParam(lowThreshold)}`);
+    }
 
-    const report = await Promise.all(
-      variants.map(async (v) => {
-        const breakdown = await Promise.all(
-          locations.map(async (loc) => {
-            const lastEntry = await this.ledgerRepo.findOne({
-              where: { variant_id: v.id, location_id: loc.id },
-              order: { createdAt: 'DESC' },
-            });
-            return {
-              location: loc.name,
-              qty: lastEntry ? lastEntry.current_balance : 0,
-            };
-          }),
-        );
+    const sortBy = query.sortBy ?? StockReportSortBy.CREATED_AT;
+    const sortOrder = query.sortOrder ?? 'DESC';
+    const sortBySql =
+      sortBy === StockReportSortBy.SKU
+        ? 'pv.sku'
+        : sortBy === StockReportSortBy.PRODUCT
+          ? 'p.name'
+          : sortBy === StockReportSortBy.TOTAL_STOCK
+            ? 'COALESCE(pv.min_stock_level, 0)'
+            : 'pv.created_at';
+    const whereSql = conditions.join(' AND ');
 
-        const total = breakdown.reduce((sum, item) => sum + item.qty, 0);
+    const totalRows = await this.variantRepo.query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM product_variants pv
+        LEFT JOIN products p ON p.product_id = pv.product_id
+        WHERE ${whereSql}
+      `,
+      values,
+    );
+    const total = Number(totalRows?.[0]?.total || 0);
 
-        return {
-          sku: v.sku,
-          total_across_all_locations: total,
-          breakdown: breakdown.filter((b) => b.qty > 0), // Only show locations with stock
-        };
-      }),
+    const variants = await this.variantRepo.query(
+      `
+        SELECT
+          pv.variant_id AS variant_id,
+          pv.sku AS sku,
+          pv.product_id AS product_id,
+          COALESCE(pv.min_stock_level, 0) AS stock,
+          p.name AS product_name,
+          p.brand_id AS brand_id,
+          p.category_id AS category_id
+        FROM product_variants pv
+        LEFT JOIN products p ON p.product_id = pv.product_id
+        WHERE ${whereSql}
+        ORDER BY ${sortBySql} ${sortOrder}
+        LIMIT ${Number(limit)} OFFSET ${Number(skip)}
+      `,
+      values,
     );
 
-    return { items: report };
+    let locations = await this.locationRepo.find();
+    if (query.location_id) {
+      locations = locations.filter((location) => location.id === query.location_id);
+    }
+
+    const variantIds = variants.map((variant) => Number(variant.variant_id));
+    const locationIds = locations.map((location) => location.id);
+
+    const balancesByKey = new Map<string, number>();
+    if (variantIds.length > 0 && locationIds.length > 0) {
+      const ledgers = await this.ledgerRepo
+        .createQueryBuilder('l')
+        .select(['l.variant_id AS variant_id', 'l.location_id AS location_id', 'l.current_balance AS current_balance'])
+        .where('l.variant_id IN (:...variantIds)', { variantIds })
+        .andWhere('l.location_id IN (:...locationIds)', { locationIds })
+        .orderBy('l.variant_id', 'ASC')
+        .addOrderBy('l.location_id', 'ASC')
+        .addOrderBy('l.createdAt', 'DESC')
+        .getRawMany();
+
+      const seen = new Set<string>();
+      for (const row of ledgers) {
+        const key = `${row.variant_id}:${row.location_id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        balancesByKey.set(key, Number(row.current_balance || 0));
+      }
+    }
+
+    const data = variants.map((variant) => {
+      const breakdown = locations.map((location) => {
+        const key = `${variant.variant_id}:${location.id}`;
+        return {
+          location_id: location.id,
+          location: location.name,
+          qty: balancesByKey.get(key) ?? 0,
+        };
+      });
+      const totalAcrossAllLocations = breakdown.reduce((sum, item) => sum + Number(item.qty), 0);
+
+      return {
+        variant_id: Number(variant.variant_id),
+        sku: variant.sku,
+        product_name: variant.product_name,
+        brand_id: variant.brand_id !== null ? Number(variant.brand_id) : null,
+        category_id: variant.category_id !== null ? Number(variant.category_id) : null,
+        total_across_all_locations: totalAcrossAllLocations,
+        breakdown,
+      };
+    });
+
+    return {
+      success: true,
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async getLowStockAlerts(threshold: number = 5) {
-    const lowStockVariants = await this.variantRepo.createQueryBuilder('variant')
-      .leftJoinAndSelect('variant.product', 'product')
-      .where('variant.stock < :threshold', { threshold })
-      .getMany();
+    const rows = await this.variantRepo.query(
+      `
+        SELECT
+          pv.variant_id AS variant_id,
+          p.name AS product_name,
+          pv.sku AS sku,
+          COALESCE(pv.min_stock_level, 0) AS current_stock,
+          c.name AS color,
+          s.name AS size
+        FROM product_variants pv
+        LEFT JOIN products p ON p.product_id = pv.product_id
+        LEFT JOIN colors c ON c.color_id = pv.color_id
+        LEFT JOIN sizes s ON s.size_id = pv.size_id
+        WHERE COALESCE(pv.min_stock_level, 0) < $1
+        ORDER BY pv.created_at DESC
+      `,
+      [threshold],
+    );
 
-    return lowStockVariants.map(v => ({
-      variant_id: v.id,
-      product_name: v.product?.name,
-      sku: v.sku,
-      current_stock: v.stock,
-      color: v.color,
-      size: v.size
+    return rows.map((row) => ({
+      variant_id: Number(row.variant_id),
+      product_name: row.product_name,
+      sku: row.sku,
+      current_stock: Number(row.current_stock || 0),
+      color: row.color,
+      size: row.size,
     }));
   }
 }

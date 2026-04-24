@@ -1,12 +1,10 @@
 import { User } from "../../entities/user.entity";
 import * as bcrypt from 'bcrypt';
 import { UnauthorizedException } from "@nestjs/common";
-import Redis from 'ioredis';
 import { JwtService } from "@nestjs/jwt";
 import { Repository } from "typeorm";
 import { Role } from "../../entities/role.entity";
-
-const redis = new Redis();
+import { deleteOtp, getOtp } from "../../constants/otp.store";
 
 async function createToken(user: User, jwtService: JwtService) {
     const payload = {
@@ -67,12 +65,12 @@ async function getRoleOfUser(role_id: number, roleRepository: Repository<Role>){
 
 async function verifyOtp(email: string, otp: string) {
     if (!otp) throw new UnauthorizedException('OTP is required');
-    const storedOtp = await redis.get(email);
+    const storedOtp = await getOtp(email);
     console.log("Verifying OTP", { email, provided: otp, stored: storedOtp });
     if (!storedOtp || storedOtp !== otp) {
         throw new UnauthorizedException('Invalid OTP');
     }
-    await redis.del(email);
+    await deleteOtp(email);
     return true;
 }
 

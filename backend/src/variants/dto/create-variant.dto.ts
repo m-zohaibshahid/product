@@ -1,8 +1,10 @@
-import { IsString, IsOptional, IsUUID, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateVariantDto {
-  @IsUUID()
-  product_id: string;
+  @Type(() => Number)
+  @IsNumber()
+  product_id: number;
 
   @IsString()
   sku: string;
@@ -10,6 +12,14 @@ export class CreateVariantDto {
   @IsString()
   @IsOptional()
   size?: string;
+
+  @IsString()
+  @IsOptional()
+  color?: string;
+
+  @IsString()
+  @IsOptional()
+  image_url?: string;
 
   @IsNumber()
   @IsOptional()

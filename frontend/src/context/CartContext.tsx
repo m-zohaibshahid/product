@@ -8,6 +8,10 @@ export interface CartItem {
   price: number;
   qty: number;
   size?: string;
+  color?: string;
+  construction?: string;
+  fabricType?: string | null;
+  meters?: number;
   img: string;
 }
 

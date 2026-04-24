@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ReduxProvider } from "@/components/ReduxProvider";
 
 export const metadata: Metadata = {
   title: "Atelier — Premium Fashion Portal",
@@ -21,9 +22,11 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased selection:bg-blue-500/10 selection:text-blue-600 min-h-screen" suppressHydrationWarning>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <ReduxProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </ReduxProvider>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ export enum StockMovementType {
   CORRECTION = 'CORRECTION',
   TRANSFER_IN = 'TRANSFER_IN',
   TRANSFER_OUT = 'TRANSFER_OUT',
+  RETURN = 'RETURN',
 }
 
 export enum StockLocationType {

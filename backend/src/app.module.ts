@@ -13,6 +13,9 @@ import { CloudinaryService } from './constants/cloudinary.service';
 import { VariantsModule } from './variants/variants.module';
 import { StockModule } from './stock/stock.module';
 import { SellingModule } from './selling/selling.module';
+import { LeadgerModule } from './leadger/leadger.module';
+import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
   imports: [
@@ -21,10 +24,14 @@ import { SellingModule } from './selling/selling.module';
       inject: [],
       useFactory: () => databaseConfig(),
     }),
-    RedisModule.forRoot({
-      type: 'single',
-      url: 'redis://localhost:6379',
-    }),
+    ...(process.env.REDIS_ENABLED === 'true'
+      ? [
+          RedisModule.forRoot({
+            type: 'single',
+            url: process.env.REDIS_URL || 'redis://localhost:6379',
+          }),
+        ]
+      : []),
     TypeOrmModule.forFeature([
       User,
       Role,
@@ -34,6 +41,9 @@ import { SellingModule } from './selling/selling.module';
     VariantsModule,
     StockModule,
     SellingModule,
+    LeadgerModule,
+    PurchaseOrdersModule,
+    InventoryModule,
   ],
   controllers: [AppController],
   providers: [AppService, CloudinaryService],

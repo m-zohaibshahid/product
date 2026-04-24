@@ -1,10 +1,9 @@
 import nodemailer from 'nodemailer';
-import Redis from 'ioredis';
-const redis = new Redis();
+import { setOtp } from './otp.store';
 
 async function generateOtpWithRedis(email: string) {
 const otp = Math.floor(100000 + Math.random() * 900000);
-await redis.set(email, otp.toString(), 'EX', 60 * 5);
+await setOtp(email, otp.toString());
 return otp;
 }
 

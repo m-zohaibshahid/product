@@ -3,7 +3,7 @@ import { ProductStatus, FabricType } from '../enum';
 
 @Entity('products')
 export class Product {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn({ name: 'product_id' })
   id: string;
 
   @Column({ unique: true })

@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Get, Query, Request } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { AdjustStockDto, TransferStockDto } from './dto/stock-operations.dto';
+import { StockReportQueryDto } from './dto/stock-report-query.dto';
 
 @Controller('stock')
 export class StockController {
@@ -31,8 +32,8 @@ export class StockController {
   }
 
   @Get('report')
-  async getReport() {
-    return await this.stockService.getWideInventoryReport();
+  async getReport(@Query() query: StockReportQueryDto) {
+    return await this.stockService.getWideInventoryReport(query);
   }
 
   @Get('low-alerts')

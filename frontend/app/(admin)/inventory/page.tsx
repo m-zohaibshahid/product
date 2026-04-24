@@ -35,8 +35,25 @@ import {
 } from 'lucide-react';
 import Toast from '@/components/ui/Toast';
 import ImageUpload from '@/components/ui/ImageUpload';
+import { useInventoryModule } from '@/hooks/useInventoryModule';
 
 export default function InventoryPage() {
+  const {
+    dashboard,
+    movementSummary,
+    loading: inventoryLoading,
+    alerts: apiAlerts,
+    inventoryItems: apiInventoryItems,
+    stockVelocityItems: apiStockVelocityItems,
+    archivedAssets: apiArchivedAssets,
+    createProduct,
+    createVariant,
+    uploadVariantPhoto,
+    updateVariantColor,
+    archiveVariant,
+    restoreVariant,
+    error: inventoryApiError,
+  } = useInventoryModule();
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -47,11 +64,7 @@ export default function InventoryPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [currentRole, setCurrentRole] = useState<'admin' | 'manager' | 'buyer'>('admin');
-  const [alerts, setAlerts] = useState([
-    { id: 1, title: 'Restock Fabric Ledger', desc: 'Midnight Herringbone Wool is below safety threshold (5m left).', icon: Truck, priority: 'High', color: 'blue' },
-    { id: 2, title: 'Anomaly Detected', desc: 'Sizing mismatch detected in GAR-SHR sequence. Audit required.', icon: Brain, priority: 'Critical', color: 'red' },
-    { id: 3, title: 'Dead Capital Recovery', desc: 'Premium Sand Linen stagnant for 72 days. Suggesting 15% clearance.', icon: DollarSign, priority: 'Insight', color: 'zinc' }
-  ]);
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   
@@ -62,92 +75,266 @@ export default function InventoryPage() {
   const isLongPressActive = React.useRef(false);
 
   // Form States for Automation
-  const [formData, setFormData] = useState({
+  const initialAddFormState = {
     name: '',
     category: 'Fabric',
+    brand: 'Default Brand',
+    status: 'active',
     cost: 0,
     margin: 40,
     sku: '',
-    retail: 0
+    retail: 0,
+    construction: 'unstitched',
+    initialVolume: 0,
+    imageBase64: '',
+    manualColor: '',
+    autoDetectedColor: '',
+  };
+  const [formData, setFormData] = useState(initialAddFormState);
+  const [showVariantForm, setShowVariantForm] = useState(false);
+  const [variantStep, setVariantStep] = useState<'details' | 'confirm'>('details');
+  const [pendingVariantId, setPendingVariantId] = useState<number | null>(null);
+  const [variantForm, setVariantForm] = useState({
+    sku: '',
+    price: 0,
+    stock: 0,
+    size: '',
+    imageBase64: '',
+    manualColor: '',
+    autoDetectedColor: '',
   });
+  const famousColors = [
+    { name: 'Black', value: '#000000' },
+    { name: 'White', value: '#FFFFFF' },
+    { name: 'Navy', value: '#1E3A8A' },
+    { name: 'Royal Blue', value: '#2563EB' },
+    { name: 'Sky Blue', value: '#38BDF8' },
+    { name: 'Red', value: '#DC2626' },
+    { name: 'Maroon', value: '#7F1D1D' },
+    { name: 'Green', value: '#16A34A' },
+    { name: 'Olive', value: '#4D7C0F' },
+    { name: 'Beige', value: '#D6C6A5' },
+  ];
+  const getDisplayColorName = (rawColor: string | undefined) => {
+    if (!rawColor) return 'Default';
+    const color = String(rawColor).trim();
+    if (!color) return 'Default';
+    if (!color.startsWith('#')) return color;
+    const normalizedHex = color.toUpperCase();
+    const matched = famousColors.find((item) => item.value.toUpperCase() === normalizedHex);
+    return matched?.name || 'Custom Color';
+  };
+  const getColorSwatchValue = (rawColor: string | undefined) => {
+    if (!rawColor) return '#9CA3AF';
+    const color = String(rawColor).trim();
+    if (!color) return '#9CA3AF';
+    if (color.startsWith('#')) return color;
+    const byName = famousColors.find(
+      (item) => item.name.toLowerCase() === color.toLowerCase(),
+    );
+    return byName?.value || color;
+  };
 
-  const [inventory, setInventory] = useState([
-    { 
-      id: 1, 
-      name: 'Midnight Herringbone Wool', 
-      sku: 'FAB-WOO-0012', 
-      image: 'https://images.unsplash.com/photo-1588099768523-f4e6a5679d88?q=80&w=200&auto=format&fit=crop',
-      quantity: '42.5 M', 
-      status: 'In Stock', 
-      category: 'Fabric',
-      construction: 'unstitched',
-      shopProductId: '1',
-      price: { cost: '$32.00', retail: '$85.00', margin: '62%' },
-      location: { warehouse: 'Main Atelier', rack: 'A-12', shelf: 'Top' },
-      supplier: { name: 'Milan Wool Mill', contact: 'Massimo R.', leadTime: '14 Days' },
-      specs: { composition: '100% Virgin Wool', weight: '280 GSM', color: 'Navy #120A', width: '150cm' },
-      history: [
-        { date: 'Oct 24', action: 'Stock Added', qty: '+10m', ref: 'PO-8821' },
-        { date: 'Oct 18', action: 'Sold (Custom Suit)', qty: '-3.5m', ref: 'INV-4421' }
-      ]
-    },
-    { 
-      id: 2, 
-      name: 'Classic Oxford Button-Down', 
-      sku: 'GAR-SHR-4402', 
-      image: 'https://images.unsplash.com/photo-1596755094514-f87034a26cc1?q=80&w=200&auto=format&fit=crop',
-      quantity: '3 Units', 
-      status: 'Low Stock', 
-      category: 'Ready-to-Wear',
-      construction: 'stitched',
-      shopProductId: '3',
-      price: { cost: '$18.50', retail: '$120.00', margin: '84%' },
-      location: { warehouse: 'Retail Branch', rack: 'B-04', shelf: 'Front' },
-      supplier: { name: 'Heritage Crafters', contact: 'Emma S.', leadTime: '7 Days' },
-      specs: { composition: '100% Pima Cotton', weight: '140 GSM', color: 'Optic White', sizing: 'S/M/L/XL' },
-      history: [
-        { date: 'Oct 22', action: 'Sold', qty: '-1 unit', ref: 'INV-4410' }
-      ]
-    },
-    { 
-      id: 3, 
-      name: 'Premium Sand Linen', 
-      sku: 'FAB-LIN-9910', 
-      image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=200&auto=format&fit=crop',
-      quantity: '0.0 M', 
-      status: 'Out of Stock', 
-      category: 'Fabric',
-      construction: 'unstitched',
-      shopProductId: '12',
-      price: { cost: '$24.00', retail: '$65.00', margin: '63%' },
-      location: { warehouse: 'Main Atelier', rack: 'C-09', shelf: 'Middle' },
-      supplier: { name: 'Belfast Linens', contact: 'Liam O.', leadTime: '21 Days' },
-      specs: { composition: '100% Irish Linen', weight: '180 GSM', color: 'Sand Beige', width: '145cm' },
-      history: []
-    },
-  ]);
+  const [inventory, setInventory] = useState<any[]>([]);
 
-  const [archives, setArchives] = useState([
-    { id: 99, name: 'Vintage Silk Twill', sku: 'FAB-SIL-0001', archiveDate: 'Oct 01, 2023', reason: 'Discontinued' }
-  ]);
+  const inventoryData = inventory.length > 0 ? inventory : apiInventoryItems;
+  const alertsData = alerts.length > 0 ? alerts : apiAlerts;
+  const stockVelocityData =
+    apiStockVelocityItems.length > 0
+      ? apiStockVelocityItems
+      : inventoryData.filter((i) => i.status === 'Low Stock' || parseInt(String(i.quantity)) < 20).slice(0, 4);
+  const archivesData = apiArchivedAssets;
+  const productInventoryData = React.useMemo(() => {
+    const grouped = new Map<string, any[]>();
+    inventoryData.forEach((item) => {
+      const key = String(item.shopProductId || item.id || item.name);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(item);
+    });
+
+    return Array.from(grouped.entries()).map(([productKey, items], idx) => {
+      const variantRows = items.filter((row) => Boolean(row.variantId));
+      const base = items.find((row) => !row.variantId) || items[0];
+      const totalQty = variantRows.reduce(
+        (sum, row) => sum + (parseFloat(String(row.quantity)) || 0),
+        0,
+      );
+      const hasLow = variantRows.some((row) => row.status === 'Low Stock');
+      const hasInStock = variantRows.some((row) => row.status === 'In Stock');
+      const productStatus =
+        variantRows.length === 0
+          ? 'No Variants'
+          : totalQty <= 0
+            ? 'Out of Stock'
+            : hasLow
+              ? 'Low Stock'
+              : hasInStock
+                ? 'In Stock'
+                : 'Out of Stock';
+
+      const visualSource = variantRows.find((row) => row.image) || base;
+      return {
+        ...base,
+        id: Number(base.id || idx + 1),
+        shopProductId: String(base.shopProductId || productKey),
+        quantity: `${totalQty} M`,
+        status: productStatus,
+        image: visualSource?.image || '',
+        variantCount: variantRows.length,
+      };
+    });
+  }, [inventoryData]);
+  const selectedProductKey = String(selectedProduct?.shopProductId || selectedProduct?.id || '');
+  const selectedProductVariants = selectedProduct
+    ? inventoryData.filter(
+        (item) =>
+          String(item.shopProductId || item.id) === selectedProductKey &&
+          Boolean(item.variantId),
+      )
+    : [];
+  const selectedProductTotalStock = selectedProductVariants.reduce(
+    (sum, item) => sum + (parseFloat(String(item.quantity)) || 0),
+    0,
+  );
 
   const handleUpdateStock = () => {
     setToastMsg('Inventory record synchronized successfully!');
     setShowToast(true);
   };
 
-  const handleAddProduct = (e: any) => {
+  const handleAddProduct = async (e: any) => {
     e.preventDefault();
-    setToastMsg('New product added to master collection!');
-    setShowToast(true);
-    setShowAddModal(false);
+    try {
+      const articleCode = formData.sku || autoGenerateSKU(formData.name, formData.category);
+      await createProduct({
+        article_code: articleCode,
+        name: formData.name,
+        category: formData.category,
+        brand: formData.brand,
+        status: formData.status,
+      }).unwrap();
+      setToastMsg('Product created successfully.');
+      setShowToast(true);
+      setShowAddModal(false);
+      setFormData(initialAddFormState);
+    } catch (error: any) {
+      setToastMsg(error?.data?.message || error?.message || 'Product create failed');
+      setShowToast(true);
+    }
   };
 
-  const handleArchive = (id: number) => {
-    const product = inventory.find(p => p.id === id);
+  const handleCreateVariantForSelectedProduct = async (e: any) => {
+    e.preventDefault();
+    try {
+      const productId = Number(selectedProduct?.shopProductId || selectedProduct?.id);
+      if (!productId) {
+        setToastMsg('Invalid product selected for variant creation.');
+        setShowToast(true);
+        return;
+      }
+      if (variantStep === 'details') {
+        if (!variantForm.imageBase64) {
+          setToastMsg('Photo required hai. Continue se pehle variant photo upload karein.');
+          setShowToast(true);
+          return;
+        }
+
+        const variantSku = variantForm.sku || `${selectedProduct?.sku || 'VAR'}-${Date.now().toString().slice(-4)}`;
+        let variantRes: Record<string, unknown>;
+        try {
+          variantRes = await createVariant({
+            product_id: productId,
+            sku: variantSku,
+            size: variantForm.size || undefined,
+            price: Number(variantForm.price || 0),
+            stock: Number(variantForm.stock || 0),
+          }).unwrap();
+        } catch (createErr: any) {
+          const status = createErr?.status;
+          if (status === 409) {
+            const retrySku = `${variantSku}-${Date.now().toString().slice(-4)}`;
+            variantRes = await createVariant({
+              product_id: productId,
+              sku: retrySku,
+              size: variantForm.size || undefined,
+              price: Number(variantForm.price || 0),
+              stock: Number(variantForm.stock || 0),
+            }).unwrap();
+            setVariantForm((prev) => ({ ...prev, sku: retrySku }));
+          } else {
+            throw createErr;
+          }
+        }
+
+        const variantId = Number((variantRes as any)?.data?.variant_id);
+        if (!variantId) throw new Error('Variant ID missing in response');
+        setPendingVariantId(variantId);
+
+        const uploadRes = await uploadVariantPhoto({
+          id: variantId,
+          imageUrl: variantForm.imageBase64,
+        }).unwrap();
+        const detectedColor = String((uploadRes as any)?.data?.extracted_color || '');
+        setVariantForm((prev) => ({ ...prev, autoDetectedColor: detectedColor }));
+        setVariantStep('confirm');
+        setToastMsg('Photo processed. Auto detected color mil gaya, ab Create Variant karein.');
+        setShowToast(true);
+        return;
+      }
+
+      const variantId = pendingVariantId;
+      if (!variantId) {
+        setToastMsg('Variant session missing. Dubara New Variant se start karein.');
+        setShowToast(true);
+        return;
+      }
+      const colorToApply = variantForm.manualColor || variantForm.autoDetectedColor;
+      if (!colorToApply) {
+        setToastMsg('Color detect nahi hua. Manual color select karein phir Create Variant karein.');
+        setShowToast(true);
+        return;
+      }
+      await updateVariantColor({
+        id: variantId,
+        color: colorToApply,
+        image_url: variantForm.imageBase64 || undefined,
+      }).unwrap();
+
+      setToastMsg('Variant created successfully.');
+      setShowToast(true);
+      setShowVariantForm(false);
+      setVariantStep('details');
+      setPendingVariantId(null);
+      setVariantForm({
+        sku: '',
+        price: 0,
+        stock: 0,
+        size: '',
+        imageBase64: '',
+        manualColor: '',
+        autoDetectedColor: '',
+      });
+    } catch (error: any) {
+      if (error?.status === 413) {
+        setToastMsg('Image is too large. Please upload a smaller/compressed photo.');
+        setShowToast(true);
+        return;
+      }
+      setToastMsg(error?.data?.message || error?.message || 'Variant create flow failed');
+      setShowToast(true);
+    }
+  };
+
+  const handleArchive = async (id: number) => {
+    const product = inventoryData.find(p => p.id === id);
     if (product) {
-      setArchives([...archives, { id: product.id, name: product.name, sku: product.sku, archiveDate: new Date().toLocaleDateString(), reason: 'Manual' }]);
-      setInventory(inventory.filter(p => p.id !== id));
+      if (!product.variantId) {
+        setToastMsg('Pehly is product ka variant create karein, phir archive hoga.');
+        setShowToast(true);
+        return;
+      }
+      await archiveVariant(Number(product.variantId));
+      setInventory(inventoryData.filter(p => p.id !== id));
       setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
       setToastMsg(`${product.name} moved to archives.`);
       setShowToast(true);
@@ -155,10 +342,10 @@ export default function InventoryPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === inventory.length) {
+    if (selectedIds.length === productInventoryData.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(inventory.map(item => item.id));
+      setSelectedIds(productInventoryData.map(item => item.id));
     }
   };
 
@@ -183,16 +370,11 @@ export default function InventoryPage() {
   };
 
   const handleBulkArchive = () => {
-    const productsToArchive = inventory.filter(item => selectedIds.includes(item.id));
-    const newArchives = productsToArchive.map(p => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      archiveDate: new Date().toLocaleDateString(),
-      reason: 'Bulk Action'
-    }));
-
-    setArchives([...archives, ...newArchives]);
+    const productsToArchive = inventoryData.filter(item => selectedIds.includes(item.id) && item.variantId);
+    productsToArchive.forEach((p) => {
+      void archiveVariant(Number(p.variantId));
+    });
+    setInventory(inventoryData.filter((item) => !selectedIds.includes(item.id)));
     setSelectedIds([]);
     setSelectionMode(false);
     setShowToast(true);
@@ -201,11 +383,27 @@ export default function InventoryPage() {
   const handleEditOpen = () => {
     // If only one is selected, we edit that specific one
     // if multiple, we'd do a batch edit (for now let's handle single or first selected)
-    const productToEdit = inventory.find(i => i.id === selectedIds[0]) || selectedProduct;
+    const productToEdit = inventoryData.find(i => i.id === selectedIds[0]) || selectedProduct;
     if (productToEdit) {
       setEditingProduct(productToEdit);
       setShowEditModal(true);
     }
+  };
+
+  const openCreateVariantFromProduct = (product: any) => {
+    setSelectedProduct(product);
+    setVariantStep('details');
+    setPendingVariantId(null);
+    setVariantForm({
+      sku: `${product.sku || autoGenerateSKU(product.name || 'P', 'Fabric')}-V`,
+      price: 0,
+      stock: 0,
+      size: '',
+      imageBase64: '',
+      manualColor: '',
+      autoDetectedColor: '',
+    });
+    setShowVariantForm(true);
   };
 
   const handleUpdateProduct = (e: any) => {
@@ -353,15 +551,42 @@ export default function InventoryPage() {
             </div>
           </section>
 
+          {inventoryApiError && !inventoryLoading && (
+            <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+              {inventoryApiError}
+            </div>
+          )}
+
           {activeView === 'collection' ? (
             <>
               {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
              {[
-               { label: 'Total Value', val: '$84,200', icon: DollarSign, trend: '+4%' },
-               { label: 'Active Items', val: '842', icon: Layers, trend: 'Stable' },
-               { label: 'Low Stock', val: '14', icon: TrendingDown, trend: 'Critical', color: 'text-red-500' },
-               { label: 'New Arrivals', val: '+24', icon: Truck, trend: 'This Week' },
+               {
+                 label: 'Total Value',
+                 val: `$${Number(dashboard?.stockValuation ?? 0).toLocaleString()}`,
+                 icon: DollarSign,
+                 trend: 'Live',
+               },
+               {
+                 label: 'Active Items',
+                 val: String(Number(dashboard?.totalSkus ?? inventoryData.length ?? 0)),
+                 icon: Layers,
+                 trend: 'Stable',
+               },
+               {
+                 label: 'Low Stock',
+                 val: String(Number(dashboard?.lowStockCount ?? 0)),
+                 icon: TrendingDown,
+                 trend: 'Critical',
+                 color: 'text-red-500',
+               },
+               {
+                 label: 'New Arrivals',
+                 val: `+${Number(dashboard?.inboundThisWeek ?? 0)}`,
+                 icon: Truck,
+                 trend: 'This Week',
+               },
              ].map((stat, i) => (
                <div key={i} className="bg-white dark:bg-gray-500 p-6 rounded-[32px] border border-zinc-100 dark:border-gray-500 shadow-sm hover:shadow-xl transition-all group">
                   <div className="flex items-center justify-between mb-4">
@@ -398,9 +623,9 @@ export default function InventoryPage() {
                         <th className="px-10 py-6 w-10 animate-in fade-in slide-in-from-left-4 duration-300">
                           <div 
                             onClick={(e) => { e.stopPropagation(); toggleSelectAll(); }}
-                            className={`w-5 h-5 rounded-md border-2 transition-all cursor-pointer flex items-center justify-center ${selectedIds.length === inventory.length ? 'bg-zinc-900 border-zinc-900 dark:bg-blue-600 dark:border-blue-600' : 'border-zinc-200 dark:border-zinc-600'}`}
+                            className={`w-5 h-5 rounded-md border-2 transition-all cursor-pointer flex items-center justify-center ${selectedIds.length === productInventoryData.length ? 'bg-zinc-900 border-zinc-900 dark:bg-blue-600 dark:border-blue-600' : 'border-zinc-200 dark:border-zinc-600'}`}
                           >
-                              {selectedIds.length === inventory.length && <div className="w-2 h-2 bg-white rounded-sm" />}
+                              {selectedIds.length === productInventoryData.length && <div className="w-2 h-2 bg-white rounded-sm" />}
                           </div>
                         </th>
                       )}
@@ -412,7 +637,7 @@ export default function InventoryPage() {
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                   {inventory.map((item) => (
+                  {productInventoryData.map((item) => (
                       <tr 
                         key={item.id} 
                         onMouseDown={() => startLongPress(item.id)}
@@ -442,6 +667,7 @@ export default function InventoryPage() {
                                <div>
                                   <p className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tighter group-hover:text-blue-600 transition-colors">{item.name}</p>
                                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">SKU: {item.sku}</p>
+                                  <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-1">{item.variantCount || 0} variants</p>
                                </div>
                             </div>
                          </td>
@@ -481,10 +707,10 @@ export default function InventoryPage() {
                         </div>
                         <div className="space-y-1">
                            <p className="text-4xl font-black tracking-tighter italic-elegant">
-                              {Math.round((inventory.filter(i => i.status === 'In Stock').length / inventory.length) * 100)}%
+                              {Math.round((inventoryData.filter(i => i.status === 'In Stock').length / (inventoryData.length || 1)) * 100)}%
                            </p>
                            <p className="text-[10px] font-medium opacity-60 flex items-center gap-1">
-                              {inventory.filter(i => i.status !== 'In Stock').length} Assets require re-calibration
+                              {inventoryData.filter(i => i.status !== 'In Stock').length} Assets require re-calibration
                            </p>
                         </div>
                      </div>
@@ -498,7 +724,7 @@ export default function InventoryPage() {
                         </div>
                         <div className="space-y-1">
                            <p className="text-4xl font-black tracking-tighter italic-elegant text-zinc-900 dark:text-white">
-                              {inventory.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock').length} Items
+                             {inventoryData.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock').length} Items
                            </p>
                            <p className="text-[10px] font-medium text-red-500 flex items-center gap-1">
                               <Zap className="w-3 h-3" /> Average burn: 18 units/day
@@ -515,7 +741,7 @@ export default function InventoryPage() {
                         </div>
                         <div className="space-y-1">
                            <p className="text-4xl font-black tracking-tighter italic-elegant text-white">
-                              ${inventory.reduce((acc, i) => acc + (i.quantity * 45), 0).toLocaleString()}
+                              ${inventoryData.reduce((acc, i) => acc + ((parseFloat(String(i.quantity)) || 0) * 45), 0).toLocaleString()}
                            </p>
                            <p className="text-[10px] font-medium text-blue-400 flex items-center gap-1">Total Liquid Value in Store</p>
                         </div>
@@ -533,7 +759,7 @@ export default function InventoryPage() {
                         <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Live SKU Scrutiny</span>
                      </div>
                      <div className="space-y-8">
-                        {inventory.filter(i => i.status === 'Low Stock' || parseInt(String(i.quantity)) < 20).slice(0, 4).map((item) => {
+                       {stockVelocityData.map((item) => {
                           const q = parseInt(String(item.quantity)) || 0;
                           const healthScore = Math.round((q / 50) * 100);
                           return (
@@ -602,9 +828,21 @@ export default function InventoryPage() {
 
                      <div className="grid grid-cols-3 gap-4">
                         {[
-                          { label: 'Symmetry', val: '98.2%', trend: 'Optimum' },
-                          { label: 'Surface', val: 'Clean', trend: 'Audit Pass' },
-                          { label: 'Rotation', val: '360°', trend: 'Complete' }
+                          {
+                            label: 'Inbound',
+                            val: String(Number((movementSummary?.totals as any)?.inbound ?? 0)),
+                            trend: 'from API',
+                          },
+                          {
+                            label: 'Outbound',
+                            val: String(Number((movementSummary?.totals as any)?.outbound ?? 0)),
+                            trend: 'from API',
+                          },
+                          {
+                            label: 'Net',
+                            val: String(Number((movementSummary?.totals as any)?.net ?? 0)),
+                            trend: 'from API',
+                          }
                         ].map((stat, i) => (
                           <div key={i} className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-blue-500/30 transition-all">
                             <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">{stat.label}</p>
@@ -623,12 +861,14 @@ export default function InventoryPage() {
                      <span className="px-3 py-1 bg-red-500/10 text-red-500 rounded-lg text-[9px] font-black uppercase animate-pulse">Critical Intercepts</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                     {alerts.map((alert) => (
+                    {alertsData.map((alert) => {
+                       const AlertIcon = (alert as any).icon || AlertTriangle;
+                       return (
                         <div key={alert.id} className="p-6 bg-white dark:bg-gray-500 rounded-[32px] border border-zinc-100 dark:border-gray-500/30 shadow-sm hover:shadow-xl transition-all relative overflow-hidden group">
                            {/* Simplified alert list for cleaner layout */}
                            <div className="flex items-start gap-4">
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${alert.priority === 'Critical' ? 'bg-red-500 text-white' : 'bg-zinc-50 dark:bg-gray-700 text-zinc-400'}`}>
-                                 <alert.icon className="w-4 h-4" />
+                                 <AlertIcon className="w-4 h-4" />
                               </div>
                               <div className="flex-1 space-y-2">
                                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{alert.priority}</p>
@@ -640,7 +880,8 @@ export default function InventoryPage() {
                               </div>
                            </div>
                         </div>
-                     ))}
+                       );
+                    })}
                   </div>
                </div>
             </div>
@@ -661,7 +902,7 @@ export default function InventoryPage() {
 
            <div className="bg-zinc-100 dark:bg-gray-500/50 rounded-[40px] border border-zinc-200 dark:border-gray-500/30 p-10 min-h-[400px]">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {archives.map(item => (
+                 {archivesData.map(item => (
                    <div key={item.id} className="bg-white dark:bg-gray-500 p-8 rounded-[32px] border border-zinc-100 dark:border-zinc-700 shadow-sm hover:shadow-xl transition-all relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
                         <ArchiveIcon className="w-12 h-12 text-zinc-300 dark:text-zinc-600" />
@@ -678,7 +919,16 @@ export default function InventoryPage() {
                             <span className="text-red-500 font-black">{item.reason}</span>
                          </div>
                       </div>
-                      <button className="w-full mt-8 py-4 bg-zinc-50 dark:bg-zinc-700 text-zinc-900 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 dark:hover:bg-blue-600 hover:text-white transition-all">Restore Asset</button>
+                      <button
+                        onClick={async () => {
+                          await restoreVariant(Number(item.id));
+                          setToastMsg(`${item.name} restored successfully.`);
+                          setShowToast(true);
+                        }}
+                        className="w-full mt-8 py-4 bg-zinc-50 dark:bg-zinc-700 text-zinc-900 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 dark:hover:bg-blue-600 hover:text-white transition-all"
+                      >
+                        Restore Asset
+                      </button>
                    </div>
                  ))}
               </div>
@@ -697,6 +947,12 @@ export default function InventoryPage() {
               </button>
               <div className="flex gap-4">
                  <button onClick={() => handleArchive(selectedProduct.id)} className="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-gray-500 text-red-500 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"><Trash2 className="w-4 h-4" /> Archive Asset</button>
+                 <button
+                   onClick={() => openCreateVariantFromProduct(selectedProduct)}
+                   className="flex items-center gap-2 px-6 py-3 bg-zinc-50 dark:bg-gray-500 text-blue-600 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
+                 >
+                   <Plus className="w-4 h-4" /> Create Variant
+                 </button>
                  <button 
                    onClick={handleUpdateStock}
                    className="px-8 py-3 bg-zinc-900 dark:bg-blue-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-black dark:hover:bg-blue-700 transition-colors shadow-2xl"
@@ -706,150 +962,290 @@ export default function InventoryPage() {
               </div>
            </div>
 
-           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              {/* Product Profile */}
-              <div className="lg:col-span-8 space-y-10">
-                 <div className="bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-2xl overflow-hidden">
-                    <div className="grid grid-cols-1 md:grid-cols-2">
-                       {/* Asset Photography - Upgraded with Local File Picker */}
-                       <div className="p-8 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col justify-center border-r border-zinc-100 dark:border-zinc-700/30">
-                          <ImageUpload 
-                            onImageSelect={(base64) => {
-                              const updated = inventory.map(p => p.id === selectedProduct.id ? { ...p, image: base64 } : p);
-                              setInventory(updated);
-                              setSelectedProduct({ ...selectedProduct, image: base64 });
-                            }}
-                            currentImage={selectedProduct.image}
-                            label="Asset Photography"
-                            className="w-full h-full"
+           {showVariantForm && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-zinc-900/40 backdrop-blur-xl animate-fade-in">
+              <div className="bg-white dark:bg-gray-500 w-full max-w-5xl max-h-[90vh] rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-2xl p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+                    Create Variant for {selectedProduct?.name}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowVariantForm(false);
+                      setVariantStep('details');
+                      setPendingVariantId(null);
+                    }}
+                    className="px-4 py-2 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+                  >
+                    Close
+                  </button>
+                </div>
+                <form onSubmit={handleCreateVariantForSelectedProduct} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Variant SKU</label>
+                    <input
+                      type="text"
+                      value={variantForm.sku}
+                      onChange={(e) => setVariantForm((prev) => ({ ...prev, sku: e.target.value }))}
+                      placeholder="e.g. FAB-C30-V1"
+                      className="bg-zinc-50 dark:bg-zinc-700 p-4 rounded-2xl font-bold text-xs outline-none border-none dark:text-white w-full"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Price</label>
+                    <input
+                      type="number"
+                      value={variantForm.price}
+                      onChange={(e) => setVariantForm((prev) => ({ ...prev, price: Number(e.target.value) }))}
+                      placeholder="e.g. 4500"
+                      className="bg-zinc-50 dark:bg-zinc-700 p-4 rounded-2xl font-bold text-xs outline-none border-none dark:text-white w-full"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Initial Stock</label>
+                    <input
+                      type="number"
+                      value={variantForm.stock}
+                      onChange={(e) => setVariantForm((prev) => ({ ...prev, stock: Number(e.target.value) }))}
+                      placeholder="e.g. 20"
+                      className="bg-zinc-50 dark:bg-zinc-700 p-4 rounded-2xl font-bold text-xs outline-none border-none dark:text-white w-full"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Size (Optional)</label>
+                    <input
+                      type="text"
+                      value={variantForm.size}
+                      onChange={(e) => setVariantForm((prev) => ({ ...prev, size: e.target.value }))}
+                      placeholder="e.g. 4.5m"
+                      className="bg-zinc-50 dark:bg-zinc-700 p-4 rounded-2xl font-bold text-xs outline-none border-none dark:text-white w-full"
+                    />
+                  </div>
+                 </div>
+                 <ImageUpload
+                   label="Variant Photo"
+                   onImageSelect={(base64) => setVariantForm((prev) => ({ ...prev, imageBase64: base64 }))}
+                 />
+                {variantStep === 'confirm' && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Manual Color (Optional)</label>
+                    <div className="bg-zinc-50 dark:bg-zinc-700 p-3 rounded-2xl flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={variantForm.manualColor || '#1f2937'}
+                        onChange={(e) => setVariantForm((prev) => ({ ...prev, manualColor: e.target.value }))}
+                        className="h-10 w-12 cursor-pointer rounded-lg border-none bg-transparent p-0"
+                        title="Pick manual color"
+                      />
+                      <input
+                        type="text"
+                        value={variantForm.manualColor}
+                        onChange={(e) => setVariantForm((prev) => ({ ...prev, manualColor: e.target.value }))}
+                        placeholder="#1E3A8A or Navy Blue"
+                        className="bg-transparent font-bold text-xs outline-none border-none dark:text-white w-full"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {famousColors.map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          onClick={() => setVariantForm((prev) => ({ ...prev, manualColor: color.value }))}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-[10px] font-black uppercase tracking-wide text-zinc-600 dark:text-zinc-200 transition-colors"
+                          title={`Select ${color.name}`}
+                        >
+                          <span
+                            className="h-3 w-3 rounded-full border border-zinc-300 dark:border-zinc-500"
+                            style={{ backgroundColor: color.value }}
                           />
-                       </div>
-
-                       <div className="bg-zinc-900 dark:bg-blue-900 p-12 text-white relative group">
-                          <Warehouse className="absolute -right-8 -bottom-8 w-48 h-48 opacity-5 group-hover:opacity-10 transition-opacity transform rotate-6" />
-                          <div className="relative z-10 space-y-6">
-                             <div className="flex flex-wrap gap-3">
-                                <span className="px-4 py-1.5 bg-blue-600 text-white rounded-full text-[10px] font-bold uppercase tracking-[0.2em]">{selectedProduct.status}</span>
-                                <span className="px-4 py-1.5 bg-gray-500/30 text-white/60 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] border border-gray-500/30 uppercase">{selectedProduct.category}</span>
-                             </div>
-                             <h2 className="text-4xl md:text-5xl font-black italic-elegant tracking-tighter leading-none">{selectedProduct.name}</h2>
-                             <div className="grid grid-cols-2 gap-6 pt-6 border-t border-gray-500/30">
-                                <div>
-                                   <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-1">Stock On Hand</p>
-                                   <p className="text-xl font-black">{selectedProduct.quantity}</p>
-                                </div>
-                                <div>
-                                   <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-1">Unit Value</p>
-                                   <p className="text-xl font-black">{selectedProduct.price.retail}</p>
-                                </div>
-                             </div>
-                          </div>
-                       </div>
+                          {color.name}
+                        </button>
+                      ))}
                     </div>
-                    
-                    <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-16">
-                       <section className="space-y-8">
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2 border-b border-zinc-50 dark:border-gray-500/30 pb-6"><Tag className="w-4 h-4 text-zinc-900 dark:text-white" /> Technical Matrix</h3>
-                          <div className="space-y-6">
-                              <div className="flex justify-between items-center group">
-                                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors">Artisanal Architecture</span>
-                                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${selectedProduct.construction === 'unstitched' ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
-                                    {selectedProduct.construction === 'unstitched' ? 'Elite Unstitched' : 'Bespoke Stitched'}
-                                 </span>
-                              </div>
-                              <div className="flex justify-between items-center group">
-                                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors">Shop Link ID</span>
-                                 <span className="text-sm font-black text-primary underline decoration-primary/20">{selectedProduct.shopProductId || 'Not Linked'}</span>
-                              </div>
-                             {Object.entries(selectedProduct.specs).map(([k, v]: any) => (
-                               <div key={k} className="flex justify-between items-center group">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors">{k}</span>
-                                  <span className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{v}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Auto Detected Color</label>
+                    <div className="bg-blue-50 dark:bg-blue-900/40 p-4 rounded-2xl font-black text-xs text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-500/30">
+                      {variantForm.autoDetectedColor || 'Will be detected after upload'}
+                    </div>
+                  </div>
+                 </div>}
+                 <button
+                   type="submit"
+                   className="w-full py-4 bg-zinc-900 dark:bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black dark:hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                 >
+                  {variantStep === 'details' ? 'Continue' : 'Create Variant'} <Plus className="w-4 h-4" />
+                 </button>
+                </form>
+              </div>
+             </div>
+           )}
+
+           <div className="bg-white dark:bg-gray-500 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-8 md:p-10 space-y-6">
+             <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="text-sm font-black uppercase tracking-widest text-zinc-900 dark:text-white">
+                   All Variants - {selectedProduct?.name || 'Product'}
+                 </h3>
+                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-1">
+                   {selectedProductVariants.length} variants | Total stock {selectedProductTotalStock} M
+                 </p>
+               </div>
+               <button
+                 onClick={() => openCreateVariantFromProduct(selectedProduct)}
+                 className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors"
+               >
+                 + New Variant
+               </button>
+             </div>
+            {selectedProductVariants.length > 0 ? (
+               <div className="pt-3">
+                 <div className="overflow-x-auto rounded-2xl border border-zinc-100 dark:border-zinc-700">
+                   <table className="w-full min-w-[900px] text-left">
+                     <thead className="bg-zinc-50 dark:bg-zinc-800/70">
+                       <tr className="text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-300">
+                         <th className="px-5 py-4">Variant</th>
+                         <th className="px-5 py-4">Color</th>
+                         <th className="px-5 py-4">Quantity</th>
+                         <th className="px-5 py-4">Retail Price</th>
+                         <th className="px-5 py-4">Cost Price</th>
+                         <th className="px-5 py-4">Margin</th>
+                         <th className="px-5 py-4">Status</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-700">
+                       {selectedProductVariants.map((variant) => (
+                         <tr
+                           key={`row-${variant.id}`}
+                           className="bg-white dark:bg-zinc-900/30 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                           onClick={() => setSelectedProduct(variant)}
+                         >
+                           <td className="px-5 py-4">
+                             <div className="flex items-center gap-3">
+                               <div className="h-11 w-11 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden shrink-0">
+                                 {variant.image ? (
+                                   <img
+                                     src={variant.image}
+                                     alt={variant.name}
+                                     className="h-full w-full object-cover"
+                                   />
+                                 ) : (
+                                   <div className="h-full w-full flex items-center justify-center text-[9px] font-bold uppercase text-zinc-400">
+                                     N/A
+                                   </div>
+                                 )}
                                </div>
-                             ))}
-                          </div>
-                       </section>
-
-                       <section className="space-y-8">
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2 border-b border-zinc-50 dark:border-gray-500/30 pb-6"><QrCode className="w-4 h-4 text-zinc-900 dark:text-white" /> Digital Passport</h3>
-                          <div className="p-8 bg-zinc-50 dark:bg-gray-500 rounded-[32px] flex items-center justify-center border border-dashed border-zinc-200 dark:border-zinc-700 hover:border-blue-500 transition-colors group cursor-crosshair">
-                             <div className="text-center space-y-4">
-                               <QrCode className="w-24 h-24 text-zinc-200 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white transition-all transform group-hover:scale-110" />
-                               <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Scan for Verification</p>
+                               <div>
+                                 <p className="text-xs font-black text-zinc-900 dark:text-white">{variant.sku || 'N/A'}</p>
+                                 <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{variant.name}</p>
+                               </div>
                              </div>
-                          </div>
-                          <div className="flex gap-4">
-                             <button className="flex-1 py-4 bg-zinc-100 dark:bg-gray-500 text-zinc-900 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all">Print Label</button>
-                             <button className="flex-1 py-4 bg-zinc-100 dark:bg-gray-500 text-zinc-900 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all">Digital Key</button>
-                          </div>
-                       </section>
-                    </div>
+                           </td>
+                          <td className="px-5 py-4 text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-4 w-4 rounded border border-zinc-300 dark:border-zinc-600 shrink-0"
+                                style={{ backgroundColor: getColorSwatchValue(variant.specs?.color) }}
+                              />
+                              {getDisplayColorName(variant.specs?.color)}
+                            </div>
+                           </td>
+                           <td className="px-5 py-4 text-xs font-black text-zinc-900 dark:text-white">
+                             {variant.quantity || '0 M'}
+                           </td>
+                           <td className="px-5 py-4 text-xs font-black text-zinc-900 dark:text-white">
+                             {variant.price?.retail || '$0.00'}
+                           </td>
+                           <td className="px-5 py-4 text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                             {variant.price?.cost || '$0.00'}
+                           </td>
+                           <td className="px-5 py-4 text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                             {variant.price?.margin || '0%'}
+                           </td>
+                           <td className="px-5 py-4">
+                             <span
+                               className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                 variant.status === 'Low Stock'
+                                   ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'
+                                   : variant.status === 'Out of Stock'
+                                     ? 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200'
+                                     : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                               }`}
+                             >
+                               {variant.status}
+                             </span>
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
                  </div>
-
-                 {/* Historical Ledger */}
-                 <div className="bg-white dark:bg-gray-500 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-10 space-y-8">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2 border-b border-zinc-50 dark:border-gray-500/30 pb-6"><History className="w-4 h-4" /> Activity Ledger</h3>
-                    <div className="space-y-8 relative">
-                       {selectedProduct.history.length > 0 ? selectedProduct.history.map((h: any, i: number) => (
-                          <div key={i} className="relative pl-10 border-l-2 border-zinc-50 dark:border-gray-500/30 pb-8 last:pb-0">
-                             <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-zinc-900"></div>
-                             <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{h.date}</p>
-                             <div className="flex justify-between items-start">
-                                <div>
-                                   <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{h.action}</p>
-                                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">Ref: {h.ref}</p>
-                                </div>
-                                <span className={`text-sm font-black ${h.qty.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{h.qty}</span>
-                             </div>
-                          </div>
-                       )) : (
-                         <div className="py-10 text-center text-zinc-400 text-xs font-bold uppercase tracking-widest opacity-30">No historical data recorded.</div>
-                       )}
-                    </div>
-                 </div>
+               </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-700 p-8 text-center">
+                <p className="text-sm font-black text-zinc-700 dark:text-zinc-200 uppercase tracking-wide">
+                  No variants found for this product
+                </p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-2">
+                  Create first variant to start pricing and stock tracking
+                </p>
               </div>
-
-              {/* Sidebar: Supplier & Location */}
-              <div className="lg:col-span-4 space-y-10">
-                 <div className="bg-white dark:bg-gray-500 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-10 space-y-10">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2 border-b border-zinc-50 dark:border-gray-500/30 pb-6"><MapPin className="w-4 h-4 text-red-500" /> Physical Placement</h3>
-                    <div className="grid grid-cols-1 gap-6">
-                       <div className="p-6 bg-zinc-50 dark:bg-gray-500/50 rounded-[32px] border border-zinc-100 dark:border-zinc-700">
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Primary Facility</p>
-                          <p className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic-elegant">{selectedProduct.location.warehouse}</p>
-                       </div>
-                       <div className="grid grid-cols-2 gap-4">
-                          <div className="p-6 bg-zinc-50 dark:bg-gray-500/50 rounded-[32px] border border-zinc-100 dark:border-zinc-700">
-                             <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Section</p>
-                             <p className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tight italic">{selectedProduct.location.rack}</p>
-                          </div>
-                          <div className="p-6 bg-zinc-50 dark:bg-gray-500/50 rounded-[32px] border border-zinc-100 dark:border-zinc-700">
-                             <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Tier</p>
-                             <p className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tight italic">{selectedProduct.location.shelf}</p>
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className="bg-zinc-900 dark:bg-gray-600 rounded-[40px] p-10 text-white space-y-10 shadow-2xl relative overflow-hidden group">
-                    <Truck className="absolute -right-12 -bottom-12 w-48 h-48 opacity-10 transform scale-x-[-1] transition-transform group-hover:translate-x-4" />
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-white/30 flex items-center gap-2 border-b border-gray-500/20 pb-6">Supply Chain Origin</h3>
-                    <div className="space-y-8">
-                       <div>
-                          <p className="text-2xl font-black italic-elegant tracking-tighter leading-none">{selectedProduct.supplier.name}</p>
-                          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-2 px-3 py-1 bg-gray-500/20 rounded-full inline-block">Partner Representative: {selectedProduct.supplier.contact}</p>
-                       </div>
-                       <div className="grid grid-cols-1 gap-4">
-                          <div className="p-5 bg-gray-500/20 rounded-[24px] border border-gray-500/20">
-                             <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1">Audited Lead Time</p>
-                             <p className="text-lg font-black text-blue-400">{selectedProduct.supplier.leadTime}</p>
-                          </div>
-                       </div>
-                       <button className="w-full py-5 bg-white text-zinc-900 rounded-[28px] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 hover:text-white transition-all">Issue Purchase Order</button>
-                    </div>
-                 </div>
-              </div>
+             )}
            </div>
+
+          <div className="bg-white dark:bg-gray-500 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-8 md:p-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+              <div className="space-y-4">
+                <h2 className="text-3xl md:text-4xl font-black tracking-tighter text-zinc-900 dark:text-white">
+                  {selectedProduct.name}
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white">
+                    {selectedProduct.status}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-200">
+                    {selectedProduct.category}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Article / SKU</p>
+                    <p className="text-sm font-black text-zinc-900 dark:text-white mt-1">{selectedProduct.sku || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Product ID</p>
+                    <p className="text-sm font-black text-zinc-900 dark:text-white mt-1">{selectedProduct.shopProductId || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Stock</p>
+                    <p className="text-lg font-black text-zinc-900 dark:text-white mt-1">{selectedProductTotalStock} M</p>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Unit Price</p>
+                    <p className="text-lg font-black text-zinc-900 dark:text-white mt-1">{selectedProduct.price?.retail || '$0.00'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[28px] border border-zinc-100 dark:border-zinc-700 p-5 bg-zinc-50 dark:bg-zinc-800/40">
+                <ImageUpload
+                  onImageSelect={(base64) => {
+                    const updated = inventoryData.map((p) =>
+                      p.id === selectedProduct.id ? { ...p, image: base64 } : p,
+                    );
+                    setInventory(updated);
+                    setSelectedProduct({ ...selectedProduct, image: base64 });
+                  }}
+                  currentImage={selectedProduct.image}
+                  label="Product Image"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -858,20 +1254,25 @@ export default function InventoryPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-zinc-900/40 backdrop-blur-xl animate-fade-in">
            <div className="bg-white dark:bg-gray-600 w-full max-w-xl max-h-[85vh] rounded-[48px] shadow-2xl border border-zinc-100 dark:border-gray-500/30 overflow-hidden relative animate-scale-in flex flex-col">
               <button 
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setFormData(initialAddFormState);
+                }}
                 className="absolute top-8 right-8 w-12 h-12 rounded-full bg-zinc-50 dark:bg-gray-500 flex items-center justify-center text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all shadow-sm z-50"
               ><X className="w-5 h-5" /></button>
               
               <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar">
                  <div className="space-y-1">
                     <h2 className="text-3xl font-black italic-elegant uppercase tracking-tighter dark:text-white leading-none">Add to <br /> Master Collection</h2>
-                    <p className="text-zinc-400 font-bold uppercase tracking-widest text-[9px]">Entry to Global Stock Ledger</p>
+                    <p className="text-zinc-400 font-bold uppercase tracking-widest text-[9px]">
+                      Step 1: Create Product
+                    </p>
                  </div>
 
                  <form onSubmit={handleAddProduct} className="space-y-8">
                     <div className="grid grid-cols-2 gap-6">
                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Asset Identity</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Name</label>
                           <input 
                             type="text" 
                             placeholder="e.g., Midnight Silk" 
@@ -881,7 +1282,7 @@ export default function InventoryPage() {
                           />
                        </div>
                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Category Architecture</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Category</label>
                           <select 
                             className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-xs outline-none border-none dark:text-white"
                             onChange={(e) => handleFormChange('category', e.target.value)}
@@ -894,7 +1295,7 @@ export default function InventoryPage() {
                     </div>
 
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Auto-Generated SKU</label>
+                       <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Article Code</label>
                        <div className="relative">
                           <input 
                             type="text" 
@@ -905,59 +1306,33 @@ export default function InventoryPage() {
                           <div className="absolute right-5 top-1/2 -translate-y-1/2 text-[8px] font-black bg-white dark:bg-blue-600 px-3 py-1 rounded-full uppercase italic shadow-sm">Smart Code Active</div>
                        </div>
                     </div>
-                    
-                    <div className="grid grid-cols-3 gap-4">
-                       <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Unit Cost ($)</label>
-                          <input 
-                            type="number" 
-                            placeholder="0.00" 
-                            className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-sm outline-none border-none dark:text-white" 
-                            onChange={(e) => handleFormChange('cost', e.target.value)}
-                          />
-                       </div>
-                       <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Margin (%)</label>
-                          <input 
-                            type="number" 
-                            value={formData.margin}
-                            className={`w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-sm outline-none border-none dark:text-white ${formData.margin < 30 ? 'ring-2 ring-red-500/50' : 'focus:ring-1 focus:ring-blue-500'}`}
-                            onChange={(e) => handleFormChange('margin', e.target.value)}
-                          />
-                       </div>
-                       <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Retail ($)</label>
-                          <div className="w-full bg-blue-50 dark:bg-blue-900/40 p-5 rounded-2xl font-black text-sm text-blue-600 dark:text-blue-400 overflow-hidden border border-blue-100 dark:border-blue-500/30">
-                             ${formData.retail}
-                          </div>
-                       </div>
-                    </div>
 
-                    <ImageUpload 
-                        label="Product Asset Photo"
-                        onImageSelect={(base64) => {
-                           // In a real app, you'd store this in form state
-                           console.log('Selected image:', base64);
-                        }}
-                     />
-                     
-                     <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Shop Architecture</label>
-                           <select className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-xs outline-none border-none dark:text-white">
-                              <option>Bespoke Stitched</option>
-                              <option>Elite Unstitched (Fabric)</option>
-                           </select>
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Initial Volume</label>
-                           <input type="text" placeholder="e.g. 20.0 M" className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-sm outline-none border-none dark:text-white" />
-                        </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Brand</label>
+                        <input
+                          type="text"
+                          value={formData.brand}
+                          className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-sm outline-none border-none dark:text-white"
+                          onChange={(e) => handleFormChange('brand', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Status</label>
+                        <select
+                          value={formData.status}
+                          className="w-full bg-zinc-50 dark:bg-gray-500 p-5 rounded-2xl font-bold text-xs outline-none border-none dark:text-white"
+                          onChange={(e) => handleFormChange('status', e.target.value)}
+                        >
+                          <option value="active">active</option>
+                          <option value="inactive">inactive</option>
+                        </select>
+                      </div>
                      </div>
 
                     <div className="pt-6">
                        <button className="w-full py-6 bg-zinc-900 dark:bg-blue-600 text-white rounded-[32px] font-black text-xs uppercase tracking-[0.4em] shadow-2xl hover:bg-black dark:hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
-                         Submit Asset <Plus className="w-5 h-5" />
+                         Create Product <Plus className="w-5 h-5" />
                        </button>
                     </div>
                  </form>
@@ -1146,7 +1521,7 @@ export default function InventoryPage() {
                  <div>
                     <h2 className="text-4xl font-black italic-elegant tracking-tighter dark:text-white">Full Inventory Diagnostic</h2>
                     <p className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                      <Activity className="w-3 h-3" /> Comprehensive Velocity Report • {inventory.length} Assets Audited
+                      <Activity className="w-3 h-3" /> Comprehensive Velocity Report • {inventoryData.length} Assets Audited
                     </p>
                  </div>
                  <button 
@@ -1164,7 +1539,7 @@ export default function InventoryPage() {
                        <div>Health Score</div>
                        <div className="text-right">Action Plan</div>
                     </div>
-                    {inventory.map((item) => {
+                    {inventoryData.map((item) => {
                        const q = parseInt(String(item.quantity)) || 0;
                        const healthScore = Math.round((q / 50) * 100);
                        return (
@@ -1203,11 +1578,11 @@ export default function InventoryPage() {
                  <div className="flex gap-10">
                     <div>
                        <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Total Diagnostic Value</p>
-                       <p className="text-xl font-black text-zinc-900 dark:text-white tracking-tighter">${inventory.reduce((acc, i) => acc + (parseInt(String(i.quantity)) || 0) * 45, 0).toLocaleString()}</p>
+                      <p className="text-xl font-black text-zinc-900 dark:text-white tracking-tighter">${inventoryData.reduce((acc, i) => acc + (parseInt(String(i.quantity)) || 0) * 45, 0).toLocaleString()}</p>
                     </div>
                     <div>
                        <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Critical Assets</p>
-                       <p className="text-xl font-black text-red-500 tracking-tighter">{inventory.filter(i => i.status !== 'In Stock').length}</p>
+                      <p className="text-xl font-black text-red-500 tracking-tighter">{inventoryData.filter(i => i.status !== 'In Stock').length}</p>
                     </div>
                  </div>
                  <button className="px-12 py-5 bg-zinc-900 dark:bg-blue-600 text-white rounded-full font-black text-[12px] uppercase tracking-widest shadow-2xl shadow-blue-600/20">Download Intelligence PDF</button>

@@ -7,9 +7,12 @@ import { SaleItem } from './entities/sale-item.entity';
 import { Variant } from '../variants/entities/variant.entity';
 import { StockLedger } from '../stock/entities/stock-ledger.entity';
 
+import { LeadgerModule } from '../leadger/leadger.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Sale, SaleItem, Variant, StockLedger]),
+    LeadgerModule,
   ],
   controllers: [SellingController],
   providers: [SellingService],

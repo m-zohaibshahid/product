@@ -33,6 +33,17 @@ export class CreateSaleDto {
   @IsOptional()
   customer_name?: string;
 
+  @IsUUID()
+  @IsOptional()
+  customer_id?: string;
+
+  @IsString()
+  @IsOptional()
+  payment_mode: 'CASH' | 'CREDIT' | 'PARTIAL' = 'CASH';
+
+  @IsOptional()
+  amount_paid?: number;
+
   @IsString()
   @IsOptional()
   remarks?: string;
