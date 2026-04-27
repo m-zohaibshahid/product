@@ -5,6 +5,10 @@ export class CreateCustomerDto {
   @IsString()
   name: string;
 
+  @IsNotEmpty()
+  @IsString()
+  username: string;
+
   @IsOptional()
   @IsString()
   phone?: string;

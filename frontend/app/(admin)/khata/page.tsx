@@ -1,112 +1,212 @@
 'use client';
 import React, { useState } from 'react';
-import { 
-  Plus, 
-  Search, 
-  UserPlus, 
-  Filter, 
-  Download, 
-  ArrowLeft, 
-  Wallet, 
-  ShoppingCart, 
+import {
+  Search,
+  UserPlus,
+  Download,
+  ArrowLeft,
+  Wallet,
+  ShoppingCart,
   History,
   CheckCircle2,
-  X,
-  User as UserIcon,
-  LifeBuoy,
   Users,
-  ArrowUpRight,
-  ArrowDownLeft,
-  CreditCard,
-  Banknote,
-  Receipt,
   MapPin,
   Phone,
   ChevronRight,
   TrendingDown,
-  Activity
+  Activity,
 } from 'lucide-react';
 import Toast from '@/components/ui/Toast';
+import {
+  useGetKhataDashboardQuery,
+  useGetKhataCustomersQuery,
+  useGetKhataTransactionsQuery,
+  useGetKhataCustomerDetailQuery,
+  useGetKhataHistoryQuery,
+  useCreateKhataCustomerMutation,
+  useRecordKhataPaymentMutation,
+  useRecordKhataAdjustmentMutation,
+} from '@/store/services/inventoryApi';
 
 export default function KhataPage() {
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [dashboardRange, setDashboardRange] = useState<1 | 7 | 30>(1);
   const [activeTab, setActiveTab] = useState<'customers' | 'transactions'>('customers');
   const [actionType, setActionType] = useState<'payment' | 'credit'>('payment');
+  const [actionAmount, setActionAmount] = useState<string>('');
+  const [actionRemarks, setActionRemarks] = useState<string>('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    username: '',
+    phone: '',
+    address: '',
+  });
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
-  const handleSave = () => {
-    setToastMsg(actionType === 'payment' ? 'Payment recorded successfully!' : 'Credit assigned to customer!');
-    setShowToast(true);
+  const { data: dashboard = {}, refetch: refetchDashboard } = useGetKhataDashboardQuery({ days: dashboardRange });
+  const { data: customers = [], refetch: refetchCustomers } = useGetKhataCustomersQuery({
+    page: 1,
+    limit: 100,
+    search: search || undefined,
+  });
+  const { data: transactions = [], refetch: refetchTransactions } = useGetKhataTransactionsQuery({
+    page: 1,
+    limit: 100,
+    search: search || undefined,
+  });
+  const { data: selectedDetail } = useGetKhataCustomerDetailQuery(selectedUserId as string, {
+    skip: !selectedUserId,
+  });
+  const { data: history = [], refetch: refetchHistory } = useGetKhataHistoryQuery(selectedUserId as string, {
+    skip: !selectedUserId,
+  });
+  const [createCustomer, { isLoading: creatingCustomer }] = useCreateKhataCustomerMutation();
+  const [recordPayment, { isLoading: recordingPayment }] = useRecordKhataPaymentMutation();
+  const [recordAdjustment, { isLoading: recordingAdjustment }] = useRecordKhataAdjustmentMutation();
+
+  const selectedUser = (selectedDetail as any)?.customer || null;
+  const selectedBalance = Number(selectedUser?.net_balance || 0);
+
+  const refreshKhata = async () => {
+    await Promise.all([refetchCustomers(), refetchDashboard(), refetchTransactions()]);
+    if (selectedUserId) {
+      await refetchHistory();
+    }
   };
 
-  const CUSTOMERS = [
-    { 
-      id: 'CUST-8821', 
-      name: 'Ahmed Malik', 
-      balance: 12400, 
-      lastActive: '2 hours ago', 
-      status: 'Payable',
-      address: 'House #42, Street 7, Gulberg III, Lahore',
-      phone: '+92 321 4455667'
-    },
-    { 
-      id: 'CUST-9012', 
-      name: 'Sarah Khan', 
-      balance: 0, 
-      lastActive: 'Yesterday', 
-      status: 'Clear',
-      address: 'Apartment 4B, Elite Heights, DHA Phase 5, Karachi',
-      phone: '+92 300 1122334'
-    },
-    { 
-      id: 'CUST-3342', 
-      name: 'Zohaib Shahid', 
-      balance: 45000, 
-      lastActive: '3 days ago', 
-      status: 'Payable',
-      address: 'Plot 18, Sector F-7/2, Islamabad',
-      phone: '+92 333 9988776'
-    },
-  ];
+  const handleCreateCustomer = async () => {
+    if (!newCustomer.name.trim()) {
+      setToastMsg('Customer name is required.');
+      setShowToast(true);
+      return;
+    }
+    if (!newCustomer.username.trim()) {
+      setToastMsg('Username is required and must be unique.');
+      setShowToast(true);
+      return;
+    }
+    try {
+      await createCustomer({
+        name: newCustomer.name.trim(),
+        username: newCustomer.username.trim(),
+        phone: newCustomer.phone.trim() || undefined,
+        address: newCustomer.address.trim() || undefined,
+      }).unwrap();
+      setShowCreateModal(false);
+      setNewCustomer({ name: '', username: '', phone: '', address: '' });
+      setToastMsg('Ledger user created successfully.');
+      setShowToast(true);
+      await refreshKhata();
+    } catch (error: any) {
+      setToastMsg(error?.data?.message || 'Failed to create customer');
+      setShowToast(true);
+    }
+  };
 
-  const ALL_TRANSACTIONS = [
-    { id: 'TX-1002', customer: 'Ahmed Malik', type: 'Credit', amount: 'PKR 12,500', date: 'Oct 24, 09:42 AM', status: 'Pending', method: 'Invoice' },
-    { id: 'TX-1001', customer: 'Sarah Khan', type: 'Payment', amount: 'PKR 15,000', date: 'Oct 24, 08:30 AM', status: 'Completed', method: 'Cash' },
-  ];
+  const handleSave = async () => {
+    if (!selectedUserId) return;
+    const amount = Number(actionAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setToastMsg('Please enter a valid amount.');
+      setShowToast(true);
+      return;
+    }
+    try {
+      if (actionType === 'payment') {
+        await recordPayment({
+          customer_id: selectedUserId,
+          amount,
+          payment_mode: 'CASH',
+          remarks: actionRemarks || 'Payment received',
+        }).unwrap();
+      } else {
+        await recordAdjustment({
+          customer_id: selectedUserId,
+          amount,
+          type: 'DEBIT',
+          remarks: actionRemarks || 'Credit assigned',
+        }).unwrap();
+      }
+      setActionAmount('');
+      setActionRemarks('');
+      setToastMsg(actionType === 'payment' ? 'Payment recorded successfully.' : 'Credit assigned successfully.');
+      setShowToast(true);
+      await refreshKhata();
+    } catch (error: any) {
+      setToastMsg(error?.data?.message || 'Failed to save action');
+      setShowToast(true);
+    }
+  };
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-12 animate-fade-in pb-20">
-      {!selectedUser ? (
+      {!selectedUserId ? (
         <div className="space-y-12">
-          {/* Header Row */}
           <section className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-100 dark:border-gray-500/30 pb-10">
             <div>
               <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter italic-elegant">Khata Ledger</h1>
-              <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-1">Personal Collection & Credit Management</p>
+              <p className="text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-1">Admin Ledger Customer Management</p>
             </div>
-            <div className="flex bg-zinc-50 dark:bg-gray-500 p-1.5 rounded-[24px]">
-              <button 
-                onClick={() => setActiveTab('customers')} 
-                className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'customers' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
-              >
-                <Users className="w-4 h-4" /> Clients
-              </button>
-              <button 
-                onClick={() => setActiveTab('transactions')} 
-                className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'transactions' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
-              >
-                <Activity className="w-4 h-4" /> Registry
-              </button>
+            <div className="flex flex-col gap-2 items-start md:items-end">
+              <div className="flex bg-zinc-50 dark:bg-gray-500 p-1.5 rounded-[24px]">
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'customers' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
+                >
+                  <Users className="w-4 h-4" /> Clients
+                </button>
+                <button
+                  onClick={() => setActiveTab('transactions')}
+                  className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'transactions' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
+                >
+                  <Activity className="w-4 h-4" /> Registry
+                </button>
+              </div>
+              <div className="flex bg-zinc-50 dark:bg-gray-500 p-1 rounded-[16px]">
+                {[
+                  { id: 1 as const, label: 'Daily' },
+                  { id: 7 as const, label: 'Weekly' },
+                  { id: 30 as const, label: 'Monthly' },
+                ].map((range) => (
+                  <button
+                    key={range.id}
+                    onClick={() => setDashboardRange(range.id)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      dashboardRange === range.id
+                        ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow'
+                        : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
 
-          {/* Quick Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { label: 'Total Receivables', val: 'PKR 124,500', icon: TrendingDown, color: 'text-red-500' },
-              { label: 'Settled Today', val: 'PKR 15,000', icon: Wallet, color: 'text-green-500' },
-              { label: 'Risk Factor', val: 'Low (2%)', icon: LifeBuoy, color: 'text-blue-500' },
+              {
+                label: 'Total Receivables',
+                val: `PKR ${Number((dashboard as any)?.totalReceivables || 0).toLocaleString()}`,
+                icon: TrendingDown,
+                color: 'text-red-500',
+              },
+              {
+                label: 'Settled Today',
+                val: `PKR ${Number((dashboard as any)?.settledInPeriod || 0).toLocaleString()}`,
+                icon: Wallet,
+                color: 'text-green-500',
+              },
+              {
+                label: 'Risk Factor',
+                val: `${String((dashboard as any)?.riskFactor?.label || 'LOW')} (${Number((dashboard as any)?.riskFactor?.percentage || 0)}%)`,
+                icon: Activity,
+                color: 'text-blue-500',
+              },
             ].map((stat, i) => (
               <div key={i} className="bg-white dark:bg-gray-500 p-10 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-sm hover:shadow-xl transition-all group">
                 <div className="flex items-center justify-between mb-8">
@@ -117,18 +217,31 @@ export default function KhataPage() {
                 </div>
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{stat.label}</p>
                 <p className={`text-2xl font-black tracking-tighter ${stat.color}`}>{stat.val}</p>
+                {stat.label === 'Settled Today' && (
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mt-1">
+                    Last {dashboardRange} day{dashboardRange > 1 ? 's' : ''}
+                  </p>
+                )}
               </div>
             ))}
           </div>
 
-          {/* Table Container */}
           <div className="bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-xl overflow-hidden">
              <div className="p-10 border-b border-zinc-50 dark:border-gray-500/30 flex items-center justify-between gap-8">
                 <div className="relative flex-1 max-w-xl">
                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400 w-5 h-5" />
-                   <input type="text" placeholder="Search by Client Name or ID..." className="w-full pl-14 pr-6 py-5 bg-zinc-50 dark:bg-gray-500 rounded-2xl border-none outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500 font-bold text-sm" />
+                   <input
+                     type="text"
+                     value={search}
+                     onChange={(e) => setSearch(e.target.value)}
+                     placeholder="Search by Client Name or ID..."
+                     className="w-full pl-14 pr-6 py-5 bg-zinc-50 dark:bg-gray-500 rounded-2xl border-none outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-500 font-bold text-sm"
+                   />
                 </div>
-                <button className="bg-zinc-900 dark:bg-blue-600 text-white px-8 py-4 rounded-full font-bold flex items-center gap-2 hover:bg-black dark:hover:bg-blue-700 transition-all shadow-xl shadow-zinc-200 dark:shadow-black/20 uppercase tracking-widest text-xs">
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-zinc-900 dark:bg-blue-600 text-white px-8 py-4 rounded-full font-bold flex items-center gap-2 hover:bg-black dark:hover:bg-blue-700 transition-all shadow-xl shadow-zinc-200 dark:shadow-black/20 uppercase tracking-widest text-xs"
+                >
                    <UserPlus className="w-4 h-4" /> New Account
                 </button>
              </div>
@@ -143,24 +256,34 @@ export default function KhataPage() {
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                   {(activeTab === 'customers' ? CUSTOMERS : ALL_TRANSACTIONS).map((item: any, idx) => (
-                      <tr key={idx} onClick={() => setSelectedUser(item)} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10 transition-all cursor-pointer group">
+                   {(activeTab === 'customers' ? customers : transactions).map((item: any, idx) => (
+                      <tr
+                        key={idx}
+                        onClick={() => activeTab === 'customers' && setSelectedUserId(String(item.id))}
+                        className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10 transition-all cursor-pointer group"
+                      >
                          <td className="px-10 py-10">
                             <p className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tighter group-hover:text-blue-600 transition-colors">
-                               {activeTab === 'customers' ? item.name : item.customer}
+                               {activeTab === 'customers' ? item.name : item.customerName}
                             </p>
                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">REF-ID: {item.id}</p>
                          </td>
                          <td className="px-10 py-10 text-center">
-                            <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border ${activeTab === 'customers' && item.balance > 0 ? 'bg-red-50 text-red-600 border-red-100 dark:bg-red-900/10 dark:text-red-400' : 'bg-green-50 text-green-600 border-green-100 dark:bg-green-900/10 dark:text-green-400'}`}>
+                            <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border ${
+                              activeTab === 'customers' && Number(item.netBalance || 0) > 0
+                                ? 'bg-red-50 text-red-600 border-red-100 dark:bg-red-900/10 dark:text-red-400'
+                                : 'bg-green-50 text-green-600 border-green-100 dark:bg-green-900/10 dark:text-green-400'
+                            }`}>
                                <span className="text-[10px] font-black uppercase tracking-widest">{activeTab === 'customers' ? item.status : item.type}</span>
                             </div>
                          </td>
                          <td className="px-10 py-10 text-right">
-                            <p className={`text-xl font-black ${activeTab === 'customers' && item.balance > 0 ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
-                               {activeTab === 'customers' ? `PKR ${item.balance.toLocaleString()}` : item.amount}
+                            <p className={`text-xl font-black ${activeTab === 'customers' && Number(item.netBalance || 0) > 0 ? 'text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
+                               {activeTab === 'customers' ? `PKR ${Number(item.netBalance || 0).toLocaleString()}` : `PKR ${Number(item.amount || 0).toLocaleString()}`}
                             </p>
-                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">{item.lastActive || item.date}</p>
+                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">
+                              {activeTab === 'customers' ? (item.lastActivityAt || '-') : (item.date || '-')}
+                            </p>
                          </td>
                          <td className="px-10 py-10 text-right">
                             <ChevronRight className="w-6 h-6 text-zinc-200 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white transition-all transform group-hover:translate-x-2" />
@@ -171,12 +294,26 @@ export default function KhataPage() {
              </table>
           </div>
         </div>
+      ) : !selectedUser ? (
+        <div className="max-w-[1400px] mx-auto animate-fade-in pb-20">
+          <div className="flex items-center justify-between mb-8">
+            <button
+              onClick={() => setSelectedUserId(null)}
+              className="flex items-center gap-3 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all text-xs font-bold uppercase tracking-[0.2em] group"
+            >
+              <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-500 border border-zinc-100 dark:border-zinc-700 flex items-center justify-center group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm"><ArrowLeft className="w-4 h-4" /></div>
+              Back to Ledger
+            </button>
+          </div>
+          <div className="bg-white dark:bg-gray-500 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 p-10">
+            <p className="text-sm font-black uppercase tracking-widest text-zinc-400">Loading customer detail...</p>
+          </div>
+        </div>
       ) : (
-        /* ACCOUNT DETAIL VIEW */
         <div className="max-w-[1400px] mx-auto animate-slide-in pb-20 space-y-12">
            <div className="flex items-center justify-between">
               <button 
-                onClick={() => setSelectedUser(null)}
+                onClick={() => setSelectedUserId(null)}
                 className="flex items-center gap-3 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all text-xs font-bold uppercase tracking-[0.2em] group"
               >
                 <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-500 border border-zinc-100 dark:border-zinc-700 flex items-center justify-center group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm"><ArrowLeft className="w-4 h-4" /></div>
@@ -185,150 +322,215 @@ export default function KhataPage() {
               <div className="flex bg-white dark:bg-gray-500 rounded-[28px] border border-zinc-100 dark:border-gray-500/30 px-6 py-3 items-center gap-4 group cursor-pointer hover:border-blue-600 transition-all">
                  <div className="text-right">
                     <p className="text-[9px] font-black text-zinc-400 uppercase tracking-tighter">Outstanding Commitment</p>
-                    <p className="text-xl font-black text-red-500 tracking-tighter italic-elegant">PKR {selectedUser.balance?.toLocaleString() || '0'}</p>
+                    <p className="text-xl font-black text-red-500 tracking-tighter italic-elegant">PKR {selectedBalance.toLocaleString()}</p>
                  </div>
               </div>
            </div>
 
-           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              {/* Account Profile Header */}
-              <div className="lg:col-span-12">
-                 <div className="bg-zinc-900 dark:bg-blue-900 rounded-[56px] p-12 md:p-16 text-white relative overflow-hidden group shadow-2xl">
-                    <History className="absolute -right-8 -bottom-8 w-64 h-64 opacity-5 group-hover:opacity-10 transition-opacity transform rotate-12" />
-                    <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-12">
-                       <div className="space-y-6">
-                          <div className="flex gap-3">
-                             <span className="px-4 py-1.5 bg-blue-600 text-white rounded-full text-[10px] font-bold uppercase tracking-[0.2em]">VIP Client</span>
-                             <span className="px-4 py-1.5 bg-gray-500/30 text-white/60 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] border border-gray-500/30">{selectedUser.id}</span>
+           <div className="space-y-8">
+              <div className="bg-zinc-900 dark:bg-blue-900 rounded-[40px] p-10 md:p-12 text-white relative overflow-hidden shadow-2xl">
+                 <History className="absolute -right-8 -bottom-8 w-56 h-56 opacity-5" />
+                 <div className="relative z-10 flex flex-col lg:flex-row justify-between gap-10">
+                    <div className="space-y-5">
+                       <div className="flex gap-3">
+                          <span className="px-4 py-1.5 bg-blue-600 text-white rounded-full text-[10px] font-bold uppercase tracking-[0.2em]">Ledger User</span>
+                          <span className="px-4 py-1.5 bg-white/10 text-white/70 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] border border-white/20">
+                            {selectedUser.id}
+                          </span>
+                       </div>
+                       <h2 className="text-4xl md:text-6xl font-black tracking-tighter">{selectedUser.name}</h2>
+                       <div className="flex flex-wrap gap-4">
+                          <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl border border-white/20">
+                             <Phone className="w-4 h-4 text-blue-200" />
+                             <span className="text-xs font-bold">{selectedUser.phone || '-'}</span>
                           </div>
-                          <h2 className="text-6xl md:text-8xl font-black italic-elegant tracking-tighter leading-none">{selectedUser.name}</h2>
-                          <div className="flex flex-wrap gap-6 pt-6 border-t border-gray-500/30">
-                             <div className="flex items-center gap-2 bg-gray-500/20 px-4 py-2 rounded-2xl border border-gray-500/20">
-                                <Phone className="w-5 h-5 text-blue-400" />
-                                <span className="text-sm font-black">{selectedUser.phone}</span>
-                             </div>
-                             <a 
-                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedUser.address)}`}
-                               target="_blank"
-                               className="flex items-center gap-2 bg-gray-500/20 px-4 py-2 rounded-2xl border border-gray-500/20 hover:bg-gray-500/30 transition-all font-black text-sm"
-                             >
-                                <MapPin className="w-5 h-5 text-red-400" /> {selectedUser.address}
-                             </a>
+                          <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl border border-white/20">
+                             <MapPin className="w-4 h-4 text-red-200" />
+                             <span className="text-xs font-bold">{selectedUser.address || '-'}</span>
                           </div>
                        </div>
-                       <div className="text-right space-y-4">
-                          <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.4em]">Audit Health Color</p>
-                          <div className="flex gap-2 justify-end">
-                             <div className="w-12 h-2 bg-blue-500 rounded-full" />
-                             <div className="w-12 h-2 bg-white/20 rounded-full" />
-                             <div className="w-12 h-2 bg-white/20 rounded-full" />
-                          </div>
-                       </div>
+                    </div>
+                    <div className="bg-white/10 border border-white/20 rounded-2xl p-6 min-w-[250px]">
+                       <p className="text-[10px] uppercase tracking-widest text-white/70 font-black">Current Payable</p>
+                       <p className={`mt-2 text-3xl font-black tracking-tight ${selectedBalance > 0 ? 'text-red-300' : 'text-emerald-300'}`}>
+                         PKR {Math.abs(selectedBalance).toLocaleString()}
+                       </p>
+                       <p className="mt-2 text-xs font-bold text-white/70">
+                         {selectedBalance > 0
+                           ? 'Customer has pending payable amount.'
+                           : 'Customer is clear.'}
+                       </p>
                     </div>
                  </div>
               </div>
 
-              {/* Transactions Form */}
-              <div className="lg:col-span-12 xl:col-span-5 space-y-10">
-                 <div className="bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-12 space-y-12">
-                    <div className="space-y-8">
-                       <h3 className="text-xs font-black uppercase tracking-tighter text-zinc-400 italic flex items-center gap-2 border-b border-zinc-50 dark:border-gray-500/30 pb-6"><Activity className="w-4 h-4 text-zinc-900 dark:text-white" /> Action Protocol</h3>
-                       <div className="grid grid-cols-2 gap-4">
-                          <button 
-                             onClick={() => setActionType('payment')}
-                             className={`py-10 rounded-[40px] border-2 font-black text-xs uppercase tracking-[0.2em] flex flex-col items-center gap-4 transition-all ${actionType === 'payment' ? 'border-zinc-900 bg-zinc-900 text-white dark:border-blue-600 dark:bg-blue-600 shadow-2xl' : 'border-zinc-50 dark:border-gray-500/30 bg-zinc-50 dark:bg-gray-500 text-zinc-400 hover:border-zinc-200'}`}
-                          >
-                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${actionType === 'payment' ? 'bg-white/20' : 'bg-white dark:bg-zinc-700'}`}><Wallet className="w-6 h-6" /></div>
-                             Receive Cash
-                          </button>
-                          <button 
-                             onClick={() => setActionType('credit')}
-                             className={`py-10 rounded-[40px] border-2 font-black text-xs uppercase tracking-[0.2em] flex flex-col items-center gap-4 transition-all ${actionType === 'credit' ? 'border-zinc-900 bg-zinc-900 text-white dark:border-blue-600 dark:bg-blue-600 shadow-2xl' : 'border-zinc-50 dark:border-gray-500/30 bg-zinc-50 dark:bg-gray-500 text-zinc-400 hover:border-zinc-200'}`}
-                          >
-                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${actionType === 'credit' ? 'bg-white/20' : 'bg-white dark:bg-zinc-700'}`}><ShoppingCart className="w-6 h-6" /> Assign Credit</div>
-                          </button>
-                       </div>
-                    </div>
-
-                    <div className="space-y-8">
-                        {actionType === 'credit' ? (
-                          <div className="animate-fade-in space-y-4">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-2">Product Attribution</label>
-                            <div className="relative">
-                               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400 w-5 h-5 font-black" />
-                               <input type="text" placeholder="Select Bespoke Product..." className="w-full pl-14 pr-6 py-6 bg-zinc-50 dark:bg-gray-500 border-none rounded-[28px] focus:ring-1 focus:ring-zinc-900 dark:focus:ring-blue-600 outline-none text-sm font-bold dark:text-white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="animate-fade-in space-y-4">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-2">Settlement Value</label>
-                            <div className="relative">
-                               <span className="absolute left-8 top-1/2 -translate-y-1/2 text-zinc-300 font-black text-2xl tracking-tighter">PKR</span>
-                               <input type="number" placeholder="00.00" className="w-full pl-24 pr-8 py-8 bg-zinc-50 dark:bg-gray-500 text-5xl font-black text-zinc-900 dark:text-white tracking-tighter border-none rounded-[40px] focus:ring-2 focus:ring-blue-600 outline-none placeholder:text-zinc-200 dark:placeholder:text-zinc-700" />
-                            </div>
-                          </div>
-                        )}
-                    </div>
-
-                    <button 
-                       onClick={handleSave}
-                       className="w-full py-8 bg-zinc-900 dark:bg-blue-600 text-white rounded-[40px] font-black uppercase tracking-[0.5em] text-xs transition-all shadow-2xl hover:bg-black dark:hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-4"
-                    >
-                       Confirm Settlement <CheckCircle2 className="w-6 h-6" />
-                    </button>
-                 </div>
+              <div className="bg-white dark:bg-gray-500 rounded-[32px] border border-zinc-100 dark:border-gray-500/30 shadow-xl p-6 md:p-8 space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h3 className="text-sm font-black uppercase tracking-widest text-zinc-900 dark:text-white">Update Payable</h3>
+                  <p className="text-xs font-bold text-zinc-500 dark:text-zinc-300">
+                    Use this section when customer is paying cash or when new payable is assigned.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <button
+                    onClick={() => setActionType('payment')}
+                    className={`rounded-2xl px-4 py-4 text-xs font-black uppercase tracking-widest transition-all ${
+                      actionType === 'payment'
+                        ? 'bg-emerald-600 text-white shadow-lg'
+                        : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-200'
+                    }`}
+                  >
+                    Receive Payment
+                  </button>
+                  <button
+                    onClick={() => setActionType('credit')}
+                    className={`rounded-2xl px-4 py-4 text-xs font-black uppercase tracking-widest transition-all ${
+                      actionType === 'credit'
+                        ? 'bg-red-600 text-white shadow-lg'
+                        : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-200'
+                    }`}
+                  >
+                    Add Payable
+                  </button>
+                  <div className="md:col-span-2 rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Action Type</p>
+                    <p className="text-sm font-black text-zinc-900 dark:text-white mt-1">
+                      {actionType === 'payment' ? 'Payment Received (Reduce Payable)' : 'Credit Assigned (Increase Payable)'}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Amount (PKR)</label>
+                    <input
+                      type="number"
+                      value={actionAmount}
+                      onChange={(e) => setActionAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="mt-2 w-full rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4 text-lg font-black text-zinc-900 dark:text-zinc-100 outline-none"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Remarks</label>
+                    <input
+                      type="text"
+                      value={actionRemarks}
+                      onChange={(e) => setActionRemarks(e.target.value)}
+                      placeholder={actionType === 'payment' ? 'Payment note...' : 'Payable note...'}
+                      className="mt-2 w-full rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4 text-sm font-bold text-zinc-900 dark:text-zinc-100 outline-none"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleSave}
+                  disabled={recordingPayment || recordingAdjustment}
+                  className="w-full md:w-auto px-6 py-3 rounded-2xl bg-zinc-900 dark:bg-blue-600 text-white text-xs font-black uppercase tracking-widest hover:bg-black dark:hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {actionType === 'payment' ? 'Confirm Payment' : 'Confirm Payable'}
+                </button>
               </div>
 
-              {/* Personal Activity Ledger Table */}
-              <div className="lg:col-span-12 xl:col-span-7">
-                 <div className="bg-white dark:bg-gray-500 rounded-[48px] border border-zinc-100 dark:border-gray-500/30 shadow-2xl overflow-hidden min-h-[600px] flex flex-col">
-                    <div className="p-10 border-b border-zinc-50 dark:border-gray-500/30 flex items-center justify-between">
-                       <h3 className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-[0.3em] italic-elegant">Chronological Ledger</h3>
-                       <button className="flex items-center gap-2 px-6 py-2.5 bg-zinc-50 dark:bg-gray-500 text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-full font-bold text-[10px] uppercase tracking-widest transition-all"><Download className="w-4 h-4" /> PDF Registry</button>
-                    </div>
-
-                    <div className="flex-1 overflow-x-auto">
-                       <table className="w-full text-left">
-                          <thead className="bg-zinc-50/50 dark:bg-gray-500/20 text-zinc-400 text-[10px] font-bold uppercase tracking-widest border-b border-zinc-50 dark:border-gray-500/30">
-                             <tr>
-                                <th className="px-10 py-6">Event Stamp</th>
-                                <th className="px-10 py-6">Attribute</th>
-                                <th className="px-10 py-6 text-right">Value Delta</th>
-                                <th className="px-10 py-6 text-right">Ledger Sum</th>
-                             </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                             {[
-                                { date: '24 Oct, 23', desc: 'Silk Drape (2m)', type: 'Credit', amount: '+12,500', balance: '12,500', up: false },
-                                { date: '18 Oct, 23', desc: 'Cash Collection', type: 'Payment', amount: '-15,000', balance: '0', up: true },
-                                { date: '12 Oct, 23', desc: 'Suit Lining #INV', type: 'Credit', amount: '+8,200', balance: '15,000', up: false },
-                                { date: '05 Oct, 23', desc: 'Manual Entry', type: 'Credit', amount: '+6,800', balance: '6,800', up: false },
-                             ].map((h, i) => (
-                                <tr key={i} className="group hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10 transition-all cursor-pointer">
-                                   <td className="px-10 py-8">
-                                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{h.date}</p>
-                                   </td>
-                                   <td className="px-10 py-8">
-                                      <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{h.desc}</p>
-                                      <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mt-1">Status: Verified</p>
-                                   </td>
-                                   <td className="px-10 py-8 text-right">
-                                      <span className={`text-lg font-black ${h.up ? 'text-green-500' : 'text-red-500'}`}>{h.amount}</span>
-                                   </td>
-                                   <td className="px-10 py-8 text-right font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic text-lg">
-                                      {h.balance}
-                                   </td>
-                                </tr>
-                             ))}
-                          </tbody>
-                       </table>
-                    </div>
-                    <div className="p-8 bg-zinc-50/50 dark:bg-gray-500/10 text-center border-t border-zinc-50 dark:border-gray-500/30">
-                       <button className="text-[10px] font-black text-zinc-300 hover:text-zinc-900 transition-colors uppercase tracking-[0.5em]">Audit Registry Complete</button>
-                    </div>
-                 </div>
+              <div className="bg-white dark:bg-gray-500 rounded-[32px] border border-zinc-100 dark:border-gray-500/30 shadow-2xl overflow-hidden">
+                <div className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-700 flex items-center justify-between">
+                  <h3 className="text-sm font-black uppercase tracking-widest text-zinc-900 dark:text-white">All Transactions</h3>
+                  <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-50 dark:bg-zinc-800 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-200">
+                    <Download className="w-4 h-4" /> Export
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[780px] text-left">
+                    <thead className="bg-zinc-50/70 dark:bg-zinc-800/60">
+                      <tr className="text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-300">
+                        <th className="px-6 py-4">Date / Time</th>
+                        <th className="px-6 py-4">Description</th>
+                        <th className="px-6 py-4">Type</th>
+                        <th className="px-6 py-4 text-right">Amount</th>
+                        <th className="px-6 py-4 text-right">Running Payable</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-700">
+                      {(history as any[]).map((h, i) => {
+                        const isCredit = h.transaction_type === 'CREDIT';
+                        return (
+                          <tr key={i} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/20">
+                            <td className="px-6 py-4 text-xs font-bold text-zinc-500 dark:text-zinc-300">
+                              {h.createdAt ? new Date(h.createdAt).toLocaleString() : '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-black text-zinc-900 dark:text-white">{h.remarks || 'Transaction'}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-zinc-400 mt-1">Ref: {h.reference || '-'}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                isCredit ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                              }`}>
+                                {isCredit ? 'Payment' : 'Payable'}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 text-right text-sm font-black ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {isCredit ? '-' : '+'}PKR {Number(h.amount || 0).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm font-black text-zinc-900 dark:text-white">
+                              PKR {Number(h.running_balance || 0).toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {(history as any[]).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-10 text-center text-xs font-bold uppercase tracking-widest text-zinc-400">
+                            No transactions found for this customer
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
            </div>
+        </div>
+      )}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-3xl p-6 space-y-4 border border-zinc-200 dark:border-zinc-700">
+            <h3 className="text-lg font-black text-zinc-900 dark:text-white">Create Ledger User</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                { key: 'name', label: 'Name', type: 'text' },
+                { key: 'username', label: 'Username (unique)', type: 'text' },
+                { key: 'phone', label: 'Phone', type: 'text' },
+              ].map((f) => (
+                <input
+                  key={f.key}
+                  type={f.type}
+                  value={(newCustomer as any)[f.key]}
+                  onChange={(e) => setNewCustomer((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.label}
+                  className="w-full rounded-xl p-3 bg-zinc-50 dark:bg-zinc-800 text-sm font-bold text-zinc-900 dark:text-zinc-100 outline-none"
+                />
+              ))}
+              <input
+                type="text"
+                value={newCustomer.address}
+                onChange={(e) => setNewCustomer((prev) => ({ ...prev, address: e.target.value }))}
+                placeholder="Address"
+                className="md:col-span-2 w-full rounded-xl p-3 bg-zinc-50 dark:bg-zinc-800 text-sm font-bold text-zinc-900 dark:text-zinc-100 outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl text-sm font-bold bg-zinc-100 dark:bg-zinc-800">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateCustomer}
+                disabled={creatingCustomer}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white disabled:opacity-60"
+              >
+                {creatingCustomer ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

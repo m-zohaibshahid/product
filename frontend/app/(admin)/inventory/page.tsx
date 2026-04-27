@@ -154,6 +154,7 @@ export default function InventoryPage() {
 
     return Array.from(grouped.entries()).map(([productKey, items], idx) => {
       const variantRows = items.filter((row) => Boolean(row.variantId));
+      const inStockVariantCount = variantRows.filter((row) => row.status === 'In Stock').length;
       const base = items.find((row) => !row.variantId) || items[0];
       const totalQty = variantRows.reduce(
         (sum, row) => sum + (parseFloat(String(row.quantity)) || 0),
@@ -177,10 +178,11 @@ export default function InventoryPage() {
         ...base,
         id: Number(base.id || idx + 1),
         shopProductId: String(base.shopProductId || productKey),
-        quantity: `${totalQty} M`,
+        quantity: totalQty,
         status: productStatus,
         image: visualSource?.image || '',
         variantCount: variantRows.length,
+        inStockVariantCount,
       };
     });
   }, [inventoryData]);
@@ -673,8 +675,12 @@ export default function InventoryPage() {
                          </td>
                          <td className="px-10 py-10">
                             <div className="flex flex-col">
-                               <span className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{item.quantity}</span>
-                               <span className={`text-[9px] font-bold uppercase tracking-widest mt-1 ${item.status === 'Low Stock' ? 'text-orange-500' : item.status === 'Out of Stock' ? 'text-red-500' : 'text-green-500'}`}>{item.status}</span>
+                               <span className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">
+                                 {item.inStockVariantCount || 0} Variants
+                               </span>
+                               <span className="text-[9px] font-bold uppercase tracking-widest mt-1 text-blue-500">
+                                 In Stock
+                               </span>
                             </div>
                          </td>
                          <td className="px-10 py-10">
@@ -1092,7 +1098,7 @@ export default function InventoryPage() {
                    All Variants - {selectedProduct?.name || 'Product'}
                  </h3>
                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-1">
-                   {selectedProductVariants.length} variants | Total stock {selectedProductTotalStock} M
+                   {selectedProductVariants.length} variants | Total stock {selectedProductTotalStock} units
                  </p>
                </div>
                <button
@@ -1155,7 +1161,7 @@ export default function InventoryPage() {
                             </div>
                            </td>
                            <td className="px-5 py-4 text-xs font-black text-zinc-900 dark:text-white">
-                             {variant.quantity || '0 M'}
+                            {variant.quantity || '0'}
                            </td>
                            <td className="px-5 py-4 text-xs font-black text-zinc-900 dark:text-white">
                              {variant.price?.retail || '$0.00'}
@@ -1222,7 +1228,7 @@ export default function InventoryPage() {
                   </div>
                   <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Total Stock</p>
-                    <p className="text-lg font-black text-zinc-900 dark:text-white mt-1">{selectedProductTotalStock} M</p>
+                    <p className="text-lg font-black text-zinc-900 dark:text-white mt-1">{selectedProductTotalStock} units</p>
                   </div>
                   <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Unit Price</p>

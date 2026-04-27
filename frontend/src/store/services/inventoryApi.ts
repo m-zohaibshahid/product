@@ -39,7 +39,19 @@ const baseQueryWithLogging: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQu
 export const inventoryApi = createApi({
   reducerPath: 'inventoryApi',
   baseQuery: baseQueryWithLogging,
-  tagTypes: ['InventoryDashboard', 'InventoryAlerts', 'Movements', 'Products', 'Variants', 'StockReport', 'ArchivedVariants'],
+  tagTypes: [
+    'InventoryDashboard',
+    'InventoryAlerts',
+    'Movements',
+    'Products',
+    'Variants',
+    'StockReport',
+    'ArchivedVariants',
+    'KhataCustomers',
+    'KhataTransactions',
+    'KhataDashboard',
+    'KhataHistory',
+  ],
   endpoints: (builder) => ({
     getDashboard: builder.query<Record<string, unknown>, void>({
       query: () => ({ url: '/inventory/dashboard', params: { lowThreshold: 5 } }),
@@ -136,6 +148,44 @@ export const inventoryApi = createApi({
       query: (payload) => ({ url: '/selling/process', method: 'POST', body: payload }),
       invalidatesTags: ['StockReport', 'Variants', 'InventoryDashboard', 'InventoryAlerts', 'Movements'],
     }),
+    getKhataDashboard: builder.query<Record<string, unknown>, { days?: number } | void>({
+      query: (params) => ({ url: '/leadger/dashboard', params: params ?? { days: 30 } }),
+      providesTags: ['KhataDashboard'],
+    }),
+    getKhataCustomers: builder.query<Record<string, unknown>[], Record<string, unknown> | void>({
+      query: (params) => ({ url: '/leadger/customers', params: params ?? { page: 1, limit: 50 } }),
+      transformResponse: (response: { data?: Record<string, unknown>[] }) => response?.data ?? [],
+      providesTags: ['KhataCustomers'],
+    }),
+    getKhataCustomerDetail: builder.query<Record<string, unknown>, string>({
+      query: (id) => ({ url: `/leadger/customers/${id}/detail` }),
+      providesTags: (_r, _e, id) => [{ type: 'KhataCustomers', id }, { type: 'KhataHistory', id }],
+    }),
+    getKhataHistory: builder.query<Record<string, unknown>[], string>({
+      query: (id) => ({ url: `/leadger/history/${id}` }),
+      transformResponse: (response: Record<string, unknown>[] | { data?: Record<string, unknown>[] }) => {
+        if (Array.isArray(response)) return response;
+        return (response as { data?: Record<string, unknown>[] })?.data ?? [];
+      },
+      providesTags: (_r, _e, id) => [{ type: 'KhataHistory', id }],
+    }),
+    getKhataTransactions: builder.query<Record<string, unknown>[], Record<string, unknown> | void>({
+      query: (params) => ({ url: '/leadger/transactions', params: params ?? { page: 1, limit: 50 } }),
+      transformResponse: (response: { data?: Record<string, unknown>[] }) => response?.data ?? [],
+      providesTags: ['KhataTransactions'],
+    }),
+    createKhataCustomer: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
+      query: (payload) => ({ url: '/leadger/customers', method: 'POST', body: payload }),
+      invalidatesTags: ['KhataCustomers', 'KhataDashboard', 'KhataTransactions'],
+    }),
+    recordKhataPayment: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
+      query: (payload) => ({ url: '/leadger/payment', method: 'POST', body: payload }),
+      invalidatesTags: ['KhataCustomers', 'KhataDashboard', 'KhataTransactions', 'KhataHistory'],
+    }),
+    recordKhataAdjustment: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
+      query: (payload) => ({ url: '/leadger/adjustment', method: 'POST', body: payload }),
+      invalidatesTags: ['KhataCustomers', 'KhataDashboard', 'KhataTransactions', 'KhataHistory'],
+    }),
   }),
 });
 
@@ -154,4 +204,12 @@ export const {
   useArchiveVariantMutation,
   useRestoreVariantMutation,
   useProcessSaleMutation,
+  useGetKhataDashboardQuery,
+  useGetKhataCustomersQuery,
+  useGetKhataCustomerDetailQuery,
+  useGetKhataHistoryQuery,
+  useGetKhataTransactionsQuery,
+  useCreateKhataCustomerMutation,
+  useRecordKhataPaymentMutation,
+  useRecordKhataAdjustmentMutation,
 } = inventoryApi;

@@ -29,100 +29,155 @@ export class LeadgerService {
     private paymentRepo: Repository<Payment>,
   ) {}
 
+  private async getAnyUserId(manager: EntityManager): Promise<number> {
+    const rows = await manager.query(`SELECT user_id FROM users ORDER BY user_id ASC LIMIT 1`);
+    const userId = Number(rows?.[0]?.user_id);
+    if (!Number.isFinite(userId)) {
+      throw new BadRequestException('No valid system user found.');
+    }
+    return userId;
+  }
+
+  private mapPaymentMode(value?: string): string {
+    const mode = String(value || 'cash').toLowerCase();
+    if (mode === 'cash') return 'cash';
+    if (mode === 'online') return 'bank_transfer';
+    if (mode === 'card') return 'card';
+    if (mode === 'upi') return 'upi';
+    if (mode === 'bank_transfer') return 'bank_transfer';
+    if (mode === 'cheque') return 'cheque';
+    return 'cash';
+  }
+
+  private async getCustomerBalance(manager: EntityManager, customerId: number): Promise<number> {
+    const rows = await manager.query(
+      `
+        WITH sales_sum AS (
+          SELECT COALESCE(SUM(s.total_amount), 0)::numeric AS total
+          FROM sales s
+          WHERE s.customer_id = $1
+        ),
+        pay_sum AS (
+          SELECT COALESCE(SUM(p.amount), 0)::numeric AS total
+          FROM payments p
+          INNER JOIN sales s ON s.sale_id = p.sale_id
+          WHERE s.customer_id = $1
+        )
+        SELECT (SELECT total FROM sales_sum) - (SELECT total FROM pay_sum) AS balance
+      `,
+      [customerId],
+    );
+    return Number(rows?.[0]?.balance || 0);
+  }
+
   async createCustomer(dto: CreateCustomerDto, userId?: string) {
-    const existing = await this.customerRepo.findOne({ where: { name: dto.name } });
-    if (existing) throw new BadRequestException(`A customer with name '${dto.name}' already exists.`);
-
     return await this.dataSource.transaction(async (manager: EntityManager) => {
-      const customer = manager.create(Customer, {
-        ...dto,
-        net_balance: dto.opening_balance || 0,
-      });
-      const savedCustomer = await manager.save(customer);
-
-      // If there's an opening balance, record it in the ledger
-      if (dto.opening_balance && dto.opening_balance !== 0) {
-        const type = dto.opening_balance > 0 ? TransactionType.DEBIT : TransactionType.CREDIT;
-        const ledgerEntry = manager.create(FinancialLedger, {
-          customer_id: savedCustomer.id,
-          transaction_type: type,
-          amount: Math.abs(dto.opening_balance),
-          running_balance: dto.opening_balance,
-          remarks: 'Opening Balance (Khata Creation)',
-          created_by: userId,
-        });
-        await manager.save(ledgerEntry);
+      const nameCheck = await manager.query(`SELECT customer_id FROM customers WHERE LOWER(name) = LOWER($1) LIMIT 1`, [dto.name.trim()]);
+      if (nameCheck?.length) {
+        throw new BadRequestException(`A customer with name '${dto.name}' already exists.`);
+      }
+      const usernameCheck = await manager.query(`SELECT customer_id FROM customers WHERE LOWER(email) = LOWER($1) LIMIT 1`, [
+        dto.username.trim(),
+      ]);
+      if (usernameCheck?.length) {
+        throw new BadRequestException(`Username '${dto.username}' already exists.`);
       }
 
-      return savedCustomer;
+      const created = await manager.query(
+        `
+          INSERT INTO customers (name, email, phone, address)
+          VALUES ($1, $2, $3, $4)
+          RETURNING customer_id, name, email, phone, address, status, created_at, updated_at
+        `,
+        [dto.name.trim(), dto.username.trim(), dto.phone || null, dto.address || null],
+      );
+      return created?.[0] || null;
     });
   }
 
   async findAllCustomers(query: LeadgerListCustomersDto = {}) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const search = query.search?.trim();
+    const search = query.search?.trim() || '';
     const sortOrder = query.sortOrder ?? 'ASC';
     const sortBy = query.sortBy ?? LeadgerCustomerSortBy.NAME;
+    const sortSql =
+      sortBy === LeadgerCustomerSortBy.BALANCE
+        ? `balance ${sortOrder}`
+        : sortBy === LeadgerCustomerSortBy.LAST_ACTIVITY
+          ? `"lastActivityAt" ${sortOrder} NULLS LAST`
+          : `name ${sortOrder}`;
 
-    const filtersQb = this.customerRepo.createQueryBuilder('c');
-    if (search) {
-      filtersQb.andWhere('(c.name ILIKE :search OR CAST(c.id as text) ILIKE :search)', {
-        search: `%${search}%`,
-      });
-    }
-    if (query.status === LeadgerCustomerStatus.PAYABLE) {
-      filtersQb.andWhere('c.net_balance > 0');
-    }
-    if (query.status === LeadgerCustomerStatus.CLEAR) {
-      filtersQb.andWhere('c.net_balance <= 0');
-    }
+    const rows = await this.dataSource.query(
+      `
+        WITH balances AS (
+          SELECT
+            c.customer_id,
+            COALESCE(SUM(s.total_amount), 0)::numeric - COALESCE(SUM(p.amount), 0)::numeric AS balance,
+            GREATEST(
+              COALESCE(MAX(s.created_at), '1970-01-01'::timestamp),
+              COALESCE(MAX(p.created_at), '1970-01-01'::timestamp)
+            ) AS last_activity
+          FROM customers c
+          LEFT JOIN sales s ON s.customer_id = c.customer_id
+          LEFT JOIN payments p ON p.sale_id = s.sale_id
+          GROUP BY c.customer_id
+        )
+        SELECT
+          c.customer_id::text AS id,
+          c.name,
+          c.email AS username,
+          c.phone,
+          c.address,
+          NULL::text AS category,
+          0::numeric AS "creditLimit",
+          COALESCE(b.balance, 0)::numeric AS "netBalance",
+          NULLIF(b.last_activity, '1970-01-01'::timestamp) AS "lastActivityAt"
+        FROM customers c
+        LEFT JOIN balances b ON b.customer_id = c.customer_id
+        WHERE ($1::text = '' OR c.name ILIKE $2 OR c.email ILIKE $2 OR c.customer_id::text ILIKE $2)
+          AND (
+            $3::text = ''
+            OR ($3 = 'PAYABLE' AND COALESCE(b.balance, 0) > 0)
+            OR ($3 = 'CLEAR' AND COALESCE(b.balance, 0) <= 0)
+          )
+        ORDER BY ${sortSql}
+        LIMIT $4 OFFSET $5
+      `,
+      [search, `%${search}%`, query.status ?? '', Number(limit), Number((page - 1) * limit)],
+    );
 
-    const total = await filtersQb.getCount();
-
-    const qb = this.customerRepo
-      .createQueryBuilder('c')
-      .leftJoin(FinancialLedger, 'l', 'l.customer_id = c.id')
-      .select([
-        'c.id AS id',
-        'c.name AS name',
-        'c.phone AS phone',
-        'c.address AS address',
-        'c.category AS category',
-        'c.credit_limit AS "creditLimit"',
-        'c.net_balance AS "netBalance"',
-        'MAX(l."createdAt") AS "lastActivityAt"',
-      ])
-      .groupBy('c.id');
-
-    if (search) {
-      qb.andWhere('(c.name ILIKE :search OR CAST(c.id as text) ILIKE :search)', {
-        search: `%${search}%`,
-      });
-    }
-    if (query.status === LeadgerCustomerStatus.PAYABLE) {
-      qb.andWhere('c.net_balance > 0');
-    }
-    if (query.status === LeadgerCustomerStatus.CLEAR) {
-      qb.andWhere('c.net_balance <= 0');
-    }
-
-    if (sortBy === LeadgerCustomerSortBy.BALANCE) {
-      qb.orderBy('c.net_balance', sortOrder);
-    } else if (sortBy === LeadgerCustomerSortBy.LAST_ACTIVITY) {
-      qb.orderBy('MAX(l."createdAt")', sortOrder, 'NULLS LAST');
-    } else {
-      qb.orderBy('c.name', sortOrder);
-    }
-
-    qb.offset((page - 1) * limit).limit(limit);
-    const rows = await qb.getRawMany();
+    const totalRows = await this.dataSource.query(
+      `
+        WITH balances AS (
+          SELECT
+            c.customer_id,
+            COALESCE(SUM(s.total_amount), 0)::numeric - COALESCE(SUM(p.amount), 0)::numeric AS balance
+          FROM customers c
+          LEFT JOIN sales s ON s.customer_id = c.customer_id
+          LEFT JOIN payments p ON p.sale_id = s.sale_id
+          GROUP BY c.customer_id
+        )
+        SELECT COUNT(*)::int AS total
+        FROM customers c
+        LEFT JOIN balances b ON b.customer_id = c.customer_id
+        WHERE ($1::text = '' OR c.name ILIKE $2 OR c.email ILIKE $2 OR c.customer_id::text ILIKE $2)
+          AND (
+            $3::text = ''
+            OR ($3 = 'PAYABLE' AND COALESCE(b.balance, 0) > 0)
+            OR ($3 = 'CLEAR' AND COALESCE(b.balance, 0) <= 0)
+          )
+      `,
+      [search, `%${search}%`, query.status ?? ''],
+    );
+    const total = Number(totalRows?.[0]?.total || 0);
 
     const data = rows.map((row: any) => {
       const balance = Number(row.netBalance || 0);
       return {
         id: row.id,
         name: row.name,
+        username: row.username,
         phone: row.phone,
         address: row.address,
         category: row.category,
@@ -145,9 +200,13 @@ export class LeadgerService {
   }
 
   async findOneCustomer(id: string) {
-    const customer = await this.customerRepo.findOne({ where: { id } });
-    if (!customer) throw new NotFoundException('Customer not found');
-    return customer;
+    const rows = await this.dataSource.query(
+      `SELECT customer_id::text AS id, name, email AS username, phone, address, status, created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM customers WHERE customer_id = $1 LIMIT 1`,
+      [Number(id)],
+    );
+    if (!rows?.length) throw new NotFoundException('Customer not found');
+    return rows[0];
   }
 
   async recordPayment(dto: CreatePaymentDto, userId?: string, manager?: EntityManager) {
@@ -160,43 +219,47 @@ export class LeadgerService {
   }
 
   private async executePayment(manager: EntityManager, dto: CreatePaymentDto, userId?: string) {
-    const customer = await manager.findOne(Customer, {
-      where: { id: dto.customer_id },
-      lock: { mode: 'pessimistic_write' },
-    });
+    const customerId = Number(dto.customer_id);
+    if (!Number.isFinite(customerId)) throw new BadRequestException('Invalid customer_id');
+    const customer = await manager.query(`SELECT customer_id FROM customers WHERE customer_id = $1 LIMIT 1`, [customerId]);
+    if (!customer?.length) throw new NotFoundException('Customer not found');
 
-    if (!customer) throw new NotFoundException('Customer not found');
+    const saleRows = await manager.query(
+      `
+        SELECT s.sale_id
+        FROM sales s
+        WHERE s.customer_id = $1 AND s.payment_status IN ('unpaid', 'partial')
+        ORDER BY s.created_at DESC
+        LIMIT 1
+      `,
+      [customerId],
+    );
+    if (!saleRows?.length) {
+      throw new BadRequestException('No unpaid sale found for this customer.');
+    }
+    const saleId = Number(saleRows[0].sale_id);
+    const receivedBy = await this.getAnyUserId(manager);
+    const paymentDate = dto.payment_date ? dto.payment_date : new Date().toISOString().slice(0, 10);
+    const method = this.mapPaymentMode(dto.payment_mode);
+    const inserted = await manager.query(
+      `
+        INSERT INTO payments (sale_id, payment_date, payment_method, amount, reference_number, received_by)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING payment_id
+      `,
+      [saleId, paymentDate, method, Number(dto.amount), dto.reference_number || null, receivedBy],
+    );
+    const paymentId = Number(inserted?.[0]?.payment_id);
 
-    // 1. Create Payment Record
-    const payment = manager.create(Payment, {
-      ...dto,
-      created_by: userId,
-      payment_date: dto.payment_date ? new Date(dto.payment_date) : new Date(),
-    });
-    const savedPayment = await manager.save(payment);
+    const paidRows = await manager.query(`SELECT COALESCE(SUM(amount),0)::numeric AS paid FROM payments WHERE sale_id = $1`, [saleId]);
+    const saleTotalRows = await manager.query(`SELECT total_amount FROM sales WHERE sale_id = $1`, [saleId]);
+    const paid = Number(paidRows?.[0]?.paid || 0);
+    const total = Number(saleTotalRows?.[0]?.total_amount || 0);
+    const status = paid >= total ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+    await manager.query(`UPDATE sales SET payment_status = $1 WHERE sale_id = $2`, [status, saleId]);
 
-    // 2. Update Customer Balance
-    const oldBalance = Number(customer.net_balance);
-    const newBalance = oldBalance - Number(dto.amount);
-    customer.net_balance = newBalance;
-    await manager.save(customer);
-
-    // 3. Create Ledger Entry
-    const ledgerEntry = manager.create(FinancialLedger, {
-      customer_id: customer.id,
-      payment_id: savedPayment.id,
-      transaction_type: TransactionType.CREDIT,
-      amount: dto.amount,
-      running_balance: newBalance,
-      remarks: dto.remarks || `Payment received - ${dto.payment_mode}`,
-      created_by: userId,
-    });
-    await manager.save(ledgerEntry);
-
-    return {
-      payment_id: savedPayment.id,
-      new_balance: newBalance,
-    };
+    const newBalance = await this.getCustomerBalance(manager, customerId);
+    return { payment_id: paymentId, new_balance: newBalance };
   }
 
   /**
@@ -209,113 +272,164 @@ export class LeadgerService {
     type: TransactionType,
     metadata: { saleId?: string; returnId?: string; remarks?: string; userId?: string },
   ) {
-    const customer = await manager.findOne(Customer, {
-      where: { id: customerId },
-      lock: { mode: 'pessimistic_write' },
-    });
-
-    if (!customer) throw new NotFoundException('Customer not found');
-
-    const oldBalance = Number(customer.net_balance);
-    let newBalance = oldBalance;
+    const cid = Number(customerId);
+    if (!Number.isFinite(cid)) throw new BadRequestException('Invalid customer id');
+    const customer = await manager.query(`SELECT customer_id FROM customers WHERE customer_id = $1 LIMIT 1`, [cid]);
+    if (!customer?.length) throw new NotFoundException('Customer not found');
 
     if (type === TransactionType.DEBIT) {
-      newBalance += Number(amount);
-    } else {
-      newBalance -= Number(amount);
+      const createdBy = await this.getAnyUserId(manager);
+      const invoice = `KHATA-${Date.now()}`;
+      const locationRows = await manager.query(`SELECT location_id FROM locations ORDER BY location_id ASC LIMIT 1`);
+      const locationId = Number(locationRows?.[0]?.location_id || 1);
+      const sale = await manager.query(
+        `
+          INSERT INTO sales (
+            invoice_number, sale_date, location_id, customer_id, subtotal_amount, discount_amount, tax_amount, total_amount, payment_status, created_by
+          )
+          VALUES ($1, CURRENT_DATE, $2, $3, $4, 0, 0, $4, 'unpaid', $5)
+          RETURNING sale_id
+        `,
+        [invoice, locationId, cid, Number(amount), createdBy],
+      );
+      return { sale_id: Number(sale?.[0]?.sale_id), running_balance: await this.getCustomerBalance(manager, cid), remarks: metadata.remarks };
     }
 
-    customer.net_balance = newBalance;
-    await manager.save(customer);
-
-    const ledgerEntry = manager.create(FinancialLedger, {
-      customer_id: customer.id,
-      sale_id: metadata.saleId,
-      return_id: metadata.returnId,
-      transaction_type: type,
-      amount: amount,
-      running_balance: newBalance,
-      remarks: metadata.remarks,
-      created_by: metadata.userId,
-    });
-    
-    return await manager.save(ledgerEntry);
+    const paymentDto: CreatePaymentDto = {
+      customer_id: String(cid),
+      amount: Number(amount),
+      payment_mode: 'CASH' as any,
+      remarks: metadata.remarks || 'Manual credit adjustment',
+    };
+    return await this.executePayment(manager, paymentDto, metadata.userId);
   }
 
   async getKhataHistory(customerId: string) {
-    await this.findOneCustomer(customerId); // Verify exists
-    
-    return await this.ledgerRepo.find({
-      where: { customer_id: customerId },
-      order: { createdAt: 'DESC' },
-      relations: ['customer'],
-    });
+    const cid = Number(customerId);
+    await this.findOneCustomer(String(cid));
+    return await this.dataSource.query(
+      `
+        WITH events AS (
+          SELECT s.created_at AS ts, 'DEBIT'::text AS transaction_type, s.total_amount::numeric AS amount,
+                 COALESCE(s.invoice_number, 'Sale ' || s.sale_id::text) AS remarks, s.sale_id::text AS reference
+          FROM sales s
+          WHERE s.customer_id = $1
+          UNION ALL
+          SELECT p.created_at AS ts, 'CREDIT'::text AS transaction_type, p.amount::numeric AS amount,
+                 COALESCE(p.reference_number, 'Payment ' || p.payment_id::text) AS remarks, p.payment_id::text AS reference
+          FROM payments p
+          INNER JOIN sales s ON s.sale_id = p.sale_id
+          WHERE s.customer_id = $1
+        ),
+        ordered AS (
+          SELECT *,
+                 SUM(CASE WHEN transaction_type = 'DEBIT' THEN amount ELSE -amount END)
+                 OVER (ORDER BY ts ASC, reference ASC) AS running_balance
+          FROM events
+        )
+        SELECT
+          transaction_type,
+          amount,
+          running_balance,
+          remarks,
+          reference,
+          ts AS "createdAt"
+        FROM ordered
+        ORDER BY ts DESC, reference DESC
+      `,
+      [cid],
+    );
   }
 
   async getCustomerDetail(customerId: string) {
-    const customer = await this.findOneCustomer(customerId);
-
-    const stats = await this.ledgerRepo
-      .createQueryBuilder('l')
-      .select([
-        'COUNT(l.id) AS "totalEntries"',
-        `SUM(CASE WHEN l.transaction_type = 'DEBIT' THEN l.amount ELSE 0 END) AS "totalDebits"`,
-        `SUM(CASE WHEN l.transaction_type = 'CREDIT' THEN l.amount ELSE 0 END) AS "totalCredits"`,
-        'MAX(l."createdAt") AS "lastActivityAt"',
-      ])
-      .where('l.customer_id = :customerId', { customerId })
-      .getRawOne();
-
+    const cid = Number(customerId);
+    const customer = await this.findOneCustomer(String(cid));
+    const statsRows = await this.dataSource.query(
+      `
+        SELECT
+          COUNT(*)::int AS "totalEntries",
+          COALESCE(SUM(CASE WHEN e.type = 'DEBIT' THEN e.amount ELSE 0 END), 0)::numeric AS "totalDebits",
+          COALESCE(SUM(CASE WHEN e.type = 'CREDIT' THEN e.amount ELSE 0 END), 0)::numeric AS "totalCredits",
+          MAX(e.ts) AS "lastActivityAt"
+        FROM (
+          SELECT s.created_at AS ts, 'DEBIT'::text AS type, s.total_amount::numeric AS amount
+          FROM sales s WHERE s.customer_id = $1
+          UNION ALL
+          SELECT p.created_at AS ts, 'CREDIT'::text AS type, p.amount::numeric AS amount
+          FROM payments p INNER JOIN sales s ON s.sale_id = p.sale_id WHERE s.customer_id = $1
+        ) e
+      `,
+      [cid],
+    );
+    const stats = statsRows?.[0] || {};
     return {
-      customer,
+      customer: { ...customer, net_balance: await this.getCustomerBalance(this.dataSource.manager, cid) },
       stats: {
-        totalEntries: Number(stats?.totalEntries || 0),
-        totalDebits: Number(stats?.totalDebits || 0),
-        totalCredits: Number(stats?.totalCredits || 0),
-        lastActivityAt: stats?.lastActivityAt || null,
+        totalEntries: Number(stats.totalEntries || 0),
+        totalDebits: Number(stats.totalDebits || 0),
+        totalCredits: Number(stats.totalCredits || 0),
+        lastActivityAt: stats.lastActivityAt || null,
       },
     };
   }
 
   async getDashboardStats(query: LeadgerDashboardQueryDto = {}) {
     const days = query.days ?? 30;
-
-    const totals = await this.customerRepo
-      .createQueryBuilder('c')
-      .select([
-        'COUNT(c.id) AS "totalCustomers"',
-        `SUM(CASE WHEN c.net_balance > 0 THEN c.net_balance ELSE 0 END) AS "totalReceivables"`,
-        `SUM(CASE WHEN c.net_balance > 0 THEN 1 ELSE 0 END) AS "payableCustomers"`,
-      ])
-      .getRawOne();
-
-    const settled = await this.paymentRepo
-      .createQueryBuilder('p')
-      .select('COALESCE(SUM(p.amount), 0)', 'settledToday')
-      .where('DATE(p."createdAt") = CURRENT_DATE')
-      .getRawOne();
-
-    const recentVolume = await this.ledgerRepo
-      .createQueryBuilder('l')
-      .select('COALESCE(SUM(l.amount), 0)', 'recentVolume')
-      .where('l."createdAt" >= NOW() - (:days || \' days\')::interval', { days })
-      .getRawOne();
-
-    const totalCustomers = Number(totals?.totalCustomers || 0);
-    const payableCustomers = Number(totals?.payableCustomers || 0);
+    const totalsRows = await this.dataSource.query(
+      `
+        WITH balances AS (
+          SELECT
+            c.customer_id,
+            COALESCE(SUM(s.total_amount), 0)::numeric - COALESCE(SUM(p.amount), 0)::numeric AS balance
+          FROM customers c
+          LEFT JOIN sales s ON s.customer_id = c.customer_id
+          LEFT JOIN payments p ON p.sale_id = s.sale_id
+          GROUP BY c.customer_id
+        )
+        SELECT
+          COUNT(*)::int AS "totalCustomers",
+          COALESCE(SUM(CASE WHEN b.balance > 0 THEN b.balance ELSE 0 END),0)::numeric AS "totalReceivables",
+          COALESCE(SUM(CASE WHEN b.balance > 0 THEN 1 ELSE 0 END),0)::int AS "payableCustomers"
+        FROM customers c
+        LEFT JOIN balances b ON b.customer_id = c.customer_id
+      `,
+    );
+    const settledRows = await this.dataSource.query(
+      `
+        SELECT COALESCE(SUM(amount), 0)::numeric AS "settledInPeriod"
+        FROM payments
+        WHERE created_at >= NOW() - ($1 || ' days')::interval
+      `,
+      [days],
+    );
+    const recentRows = await this.dataSource.query(
+      `
+        SELECT COALESCE(SUM(amount), 0)::numeric AS "recentVolume"
+        FROM (
+          SELECT s.total_amount::numeric AS amount FROM sales s WHERE s.created_at >= NOW() - ($1 || ' days')::interval
+          UNION ALL
+          SELECT p.amount::numeric AS amount FROM payments p WHERE p.created_at >= NOW() - ($1 || ' days')::interval
+        ) x
+      `,
+      [days],
+    );
+    const totals = totalsRows?.[0] || {};
+    const totalCustomers = Number(totals.totalCustomers || 0);
+    const payableCustomers = Number(totals.payableCustomers || 0);
     const riskFactorPct = totalCustomers > 0 ? (payableCustomers / totalCustomers) * 100 : 0;
 
     return {
-      totalReceivables: Number(totals?.totalReceivables || 0),
-      settledToday: Number(settled?.settledToday || 0),
+      totalReceivables: Number(totals.totalReceivables || 0),
+      settledInPeriod: Number(settledRows?.[0]?.settledInPeriod || 0),
       riskFactor: {
         label: riskFactorPct <= 5 ? 'LOW' : riskFactorPct <= 20 ? 'MEDIUM' : 'HIGH',
         percentage: Number(riskFactorPct.toFixed(2)),
       },
+      periodDays: Number(days),
       totals: {
         totalCustomers,
         payableCustomers,
-        recentVolume: Number(recentVolume?.recentVolume || 0),
+        recentVolume: Number(recentRows?.[0]?.recentVolume || 0),
       },
     };
   }
@@ -325,55 +439,79 @@ export class LeadgerService {
     const limit = query.limit ?? 20;
     const sortOrder = query.sortOrder ?? 'DESC';
     const sortBy = query.sortBy ?? LeadgerTransactionsSortBy.DATE;
-
-    const qb = this.ledgerRepo
-      .createQueryBuilder('l')
-      .innerJoin(Customer, 'c', 'c.id = l.customer_id')
-      .leftJoin(Payment, 'p', 'p.id = l.payment_id')
-      .select([
-        'l.id AS id',
-        'l.customer_id AS "customerId"',
-        'c.name AS "customerName"',
-        'l.transaction_type AS type',
-        'l.amount AS amount',
-        'l.running_balance AS "runningBalance"',
-        'l.remarks AS remarks',
-        'l.sale_id AS "saleId"',
-        'l.payment_id AS "paymentId"',
-        'l.return_id AS "returnId"',
-        'l."createdAt" AS date',
-        'p.payment_mode AS "paymentMode"',
-      ]);
-
-    if (query.customerId) {
-      qb.andWhere('l.customer_id = :customerId', { customerId: query.customerId });
-    }
-    if (query.type) {
-      qb.andWhere('l.transaction_type = :type', { type: query.type });
-    }
-    if (query.search?.trim()) {
-      qb.andWhere(
-        '(c.name ILIKE :search OR CAST(c.id as text) ILIKE :search OR COALESCE(l.remarks, \'\') ILIKE :search)',
-        { search: `%${query.search.trim()}%` },
-      );
-    }
-    if (query.dateFrom) {
-      qb.andWhere('l."createdAt" >= :dateFrom', { dateFrom: query.dateFrom });
-    }
-    if (query.dateTo) {
-      qb.andWhere('l."createdAt" <= :dateTo', { dateTo: query.dateTo });
-    }
-
-    const total = await qb.getCount();
-
-    if (sortBy === LeadgerTransactionsSortBy.AMOUNT) {
-      qb.orderBy('l.amount', sortOrder);
-    } else {
-      qb.orderBy('l."createdAt"', sortOrder);
-    }
-
-    qb.offset((page - 1) * limit).limit(limit);
-    const rows = await qb.getRawMany();
+    const search = query.search?.trim() || '';
+    const sortSql = sortBy === LeadgerTransactionsSortBy.AMOUNT ? `amount ${sortOrder}` : `date ${sortOrder}`;
+    const rows = await this.dataSource.query(
+      `
+        WITH tx AS (
+          SELECT
+            ('S-' || s.sale_id::text) AS id,
+            s.customer_id::text AS "customerId",
+            c.name AS "customerName",
+            'DEBIT'::text AS type,
+            s.total_amount::numeric AS amount,
+            s.created_at AS date,
+            ('Sale ' || COALESCE(s.invoice_number, s.sale_id::text)) AS remarks,
+            s.payment_status::text AS status,
+            'INVOICE'::text AS method,
+            s.sale_id::text AS reference
+          FROM sales s
+          INNER JOIN customers c ON c.customer_id = s.customer_id
+          UNION ALL
+          SELECT
+            ('P-' || p.payment_id::text) AS id,
+            s.customer_id::text AS "customerId",
+            c.name AS "customerName",
+            'CREDIT'::text AS type,
+            p.amount::numeric AS amount,
+            p.created_at AS date,
+            COALESCE(p.reference_number, 'Payment ' || p.payment_id::text) AS remarks,
+            'COMPLETED'::text AS status,
+            p.payment_method::text AS method,
+            p.payment_id::text AS reference
+          FROM payments p
+          INNER JOIN sales s ON s.sale_id = p.sale_id
+          INNER JOIN customers c ON c.customer_id = s.customer_id
+        )
+        SELECT * FROM tx
+        WHERE ($1::text = '' OR "customerName" ILIKE $2 OR "customerId" ILIKE $2 OR COALESCE(remarks,'') ILIKE $2)
+          AND ($3::text = '' OR "customerId" = $3)
+          AND ($4::text = '' OR type = $4)
+          AND ($5::text = '' OR date::date >= $5::date)
+          AND ($6::text = '' OR date::date <= $6::date)
+        ORDER BY ${sortSql}
+        LIMIT $7 OFFSET $8
+      `,
+      [
+        search,
+        `%${search}%`,
+        query.customerId ?? '',
+        query.type ?? '',
+        query.dateFrom ?? '',
+        query.dateTo ?? '',
+        Number(limit),
+        Number((page - 1) * limit),
+      ],
+    );
+    const totalRows = await this.dataSource.query(
+      `
+        WITH tx AS (
+          SELECT s.customer_id::text AS "customerId", c.name AS "customerName", 'DEBIT'::text AS type, s.created_at AS date, ('Sale ' || COALESCE(s.invoice_number, s.sale_id::text)) AS remarks
+          FROM sales s INNER JOIN customers c ON c.customer_id = s.customer_id
+          UNION ALL
+          SELECT s.customer_id::text AS "customerId", c.name AS "customerName", 'CREDIT'::text AS type, p.created_at AS date, COALESCE(p.reference_number, 'Payment ' || p.payment_id::text) AS remarks
+          FROM payments p INNER JOIN sales s ON s.sale_id = p.sale_id INNER JOIN customers c ON c.customer_id = s.customer_id
+        )
+        SELECT COUNT(*)::int AS total FROM tx
+        WHERE ($1::text = '' OR "customerName" ILIKE $2 OR "customerId" ILIKE $2 OR COALESCE(remarks,'') ILIKE $2)
+          AND ($3::text = '' OR "customerId" = $3)
+          AND ($4::text = '' OR type = $4)
+          AND ($5::text = '' OR date::date >= $5::date)
+          AND ($6::text = '' OR date::date <= $6::date)
+      `,
+      [search, `%${search}%`, query.customerId ?? '', query.type ?? '', query.dateFrom ?? '', query.dateTo ?? ''],
+    );
+    const total = Number(totalRows?.[0]?.total || 0);
 
     const data = rows.map((row: any) => ({
       id: row.id,
@@ -381,12 +519,12 @@ export class LeadgerService {
       customerName: row.customerName,
       type: row.type,
       amount: Number(row.amount || 0),
-      runningBalance: Number(row.runningBalance || 0),
+      runningBalance: 0,
       date: row.date,
       remarks: row.remarks,
-      status: row.type === TransactionType.CREDIT ? 'COMPLETED' : 'PENDING',
-      method: row.paymentMode || 'INVOICE',
-      reference: row.saleId || row.paymentId || row.returnId || row.id,
+      status: row.status,
+      method: row.method,
+      reference: row.reference || row.id,
     }));
 
     return {
@@ -401,25 +539,36 @@ export class LeadgerService {
   }
 
   async getAgingReport() {
-    // Basic logic: Customers with positive balance (money owed to us)
-    // and when was their last transaction.
-    const query = `
-      SELECT 
-        c.id, c.name, c.phone, c.net_balance,
-        MAX(l."createdAt") as last_transaction_date,
-        CURRENT_DATE - MAX(l."createdAt")::date as days_since_last_txn
-      FROM customers c
-      LEFT JOIN financial_ledger l ON c.id = l.customer_id
-      WHERE c.net_balance > 0
-      GROUP BY c.id, c.name, c.phone, c.net_balance
-      ORDER BY last_transaction_date ASC
-    `;
-    return await this.dataSource.query(query);
+    return await this.dataSource.query(
+      `
+        WITH balances AS (
+          SELECT
+            c.customer_id,
+            COALESCE(SUM(s.total_amount), 0)::numeric - COALESCE(SUM(p.amount), 0)::numeric AS net_balance,
+            GREATEST(COALESCE(MAX(s.created_at), '1970-01-01'::timestamp), COALESCE(MAX(p.created_at), '1970-01-01'::timestamp)) AS last_tx
+          FROM customers c
+          LEFT JOIN sales s ON s.customer_id = c.customer_id
+          LEFT JOIN payments p ON p.sale_id = s.sale_id
+          GROUP BY c.customer_id
+        )
+        SELECT
+          c.customer_id::text AS id,
+          c.name,
+          c.phone,
+          b.net_balance,
+          NULLIF(b.last_tx, '1970-01-01'::timestamp) AS last_transaction_date,
+          CASE WHEN b.last_tx = '1970-01-01'::timestamp THEN NULL ELSE CURRENT_DATE - b.last_tx::date END AS days_since_last_txn
+        FROM customers c
+        INNER JOIN balances b ON b.customer_id = c.customer_id
+        WHERE b.net_balance > 0
+        ORDER BY last_transaction_date ASC NULLS LAST
+      `,
+    );
   }
 
   async recordAdjustment(body: { customer_id: string; amount: number; type: TransactionType; remarks: string }, userId?: string) {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
-      return await this.addKhataEntry(manager, body.customer_id, body.amount, body.type, {
+      return await this.addKhataEntry(manager, body.customer_id, Number(body.amount), body.type, {
         remarks: body.remarks || 'Manual Adjustment',
         userId,
       });
