@@ -242,6 +242,26 @@ export class SellingService {
         }
       }
 
+      // Persist non-ledger collections as payment rows so dashboard analytics
+      // can split cash vs online receipts reliably.
+      if (!isLedgerMode && amountPaid > 0) {
+        const paymentMethod =
+          dto.payment_mode === 'ONLINE' ? 'bank_transfer' : dto.payment_mode === 'CASH' ? 'cash' : 'cash';
+        await manager.query(
+          `
+            INSERT INTO payments (sale_id, payment_date, payment_method, amount, reference_number, received_by)
+            VALUES ($1, CURRENT_DATE, $2, $3, $4, $5)
+          `,
+          [
+            savedSaleId,
+            paymentMethod,
+            Number(amountPaid.toFixed(2)),
+            `UPFRONT-${invoiceNumber}`,
+            createdBy,
+          ],
+        );
+      }
+
       return {
         sale_id: savedSaleId,
         customer: dto.customer_name || null,

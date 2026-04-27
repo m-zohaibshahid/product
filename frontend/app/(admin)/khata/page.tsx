@@ -31,7 +31,7 @@ import {
 export default function KhataPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [dashboardRange, setDashboardRange] = useState<1 | 7 | 30>(1);
+  const [dashboardRange, setDashboardRange] = useState<1 | 7 | 30>(30);
   const [activeTab, setActiveTab] = useState<'customers' | 'transactions'>('customers');
   const [actionType, setActionType] = useState<'payment' | 'credit'>('payment');
   const [actionAmount, setActionAmount] = useState<string>('');
@@ -69,6 +69,13 @@ export default function KhataPage() {
 
   const selectedUser = (selectedDetail as any)?.customer || null;
   const selectedBalance = Number(selectedUser?.net_balance || 0);
+  const dashboardPayload = ((dashboard as any)?.data ?? dashboard) as any;
+  const periodSummary = dashboardPayload?.periodSummary ?? dashboardPayload?.period_summary ?? {};
+  const grossSales = Number(periodSummary?.grossSales ?? periodSummary?.gross_sales ?? 0);
+  const discountGiven = Number(periodSummary?.discountGiven ?? periodSummary?.discount_given ?? 0);
+  const netSales = Number(periodSummary?.netSales ?? periodSummary?.net_sales ?? 0);
+  const receivedAmount = Number(periodSummary?.receivedAmount ?? periodSummary?.received_amount ?? 0);
+  const ledgerDue = Number(periodSummary?.ledgerDue ?? periodSummary?.ledger_due ?? 0);
 
   const refreshKhata = async () => {
     await Promise.all([refetchCustomers(), refetchDashboard(), refetchTransactions()]);
@@ -187,38 +194,71 @@ export default function KhataPage() {
             </div>
           </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
             {[
               {
-                label: 'Total Receivables',
-                val: `PKR ${Number((dashboard as any)?.totalReceivables || 0).toLocaleString()}`,
+                label: 'Gross Sale',
+                val: `PKR ${grossSales.toLocaleString()}`,
                 icon: TrendingDown,
-                color: 'text-red-500',
+                color: 'text-zinc-900 dark:text-white',
+                tone: 'from-zinc-50 to-zinc-100/70 dark:from-zinc-800 dark:to-zinc-900',
+                accent: 'text-zinc-700 dark:text-zinc-200',
+                hint: `Total billed in last ${dashboardRange} day${dashboardRange > 1 ? 's' : ''}`,
               },
               {
-                label: 'Settled Today',
-                val: `PKR ${Number((dashboard as any)?.settledInPeriod || 0).toLocaleString()}`,
+                label: 'Discount Given',
+                val: `PKR ${discountGiven.toLocaleString()}`,
+                icon: Activity,
+                color: 'text-orange-500',
+                tone: 'from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/20',
+                accent: 'text-orange-600 dark:text-orange-300',
+                hint: 'Total discount issued',
+              },
+              {
+                label: 'Net Sale',
+                val: `PKR ${netSales.toLocaleString()}`,
+                icon: TrendingDown,
+                color: 'text-blue-500',
+                tone: 'from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/20',
+                accent: 'text-blue-600 dark:text-blue-300',
+                hint: 'Gross sale minus discount',
+              },
+              {
+                label: 'Received',
+                val: `PKR ${receivedAmount.toLocaleString()}`,
                 icon: Wallet,
                 color: 'text-green-500',
+                tone: 'from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/20',
+                accent: 'text-emerald-600 dark:text-emerald-300',
+                hint: 'Amount collected',
               },
               {
-                label: 'Risk Factor',
-                val: `${String((dashboard as any)?.riskFactor?.label || 'LOW')} (${Number((dashboard as any)?.riskFactor?.percentage || 0)}%)`,
+                label: 'Ledger Due',
+                val: `PKR ${ledgerDue.toLocaleString()}`,
                 icon: Activity,
-                color: 'text-blue-500',
+                color: 'text-red-500',
+                tone: 'from-rose-50 to-red-50 dark:from-rose-950/40 dark:to-red-950/20',
+                accent: 'text-rose-600 dark:text-rose-300',
+                hint: 'Pending payable balance',
               },
             ].map((stat, i) => (
-              <div key={i} className="bg-white dark:bg-gray-500 p-10 rounded-[40px] border border-zinc-100 dark:border-gray-500/30 shadow-sm hover:shadow-xl transition-all group">
-                <div className="flex items-center justify-between mb-8">
-                   <div className="w-12 h-12 bg-zinc-50 dark:bg-gray-500 rounded-2xl flex items-center justify-center text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-blue-600 group-hover:text-white transition-all">
+              <div
+                key={i}
+                className={`rounded-3xl border border-zinc-200/70 dark:border-zinc-700/70 bg-linear-to-br ${stat.tone} p-6 shadow-sm hover:shadow-lg transition-all duration-300 group`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                   <div className="w-11 h-11 rounded-2xl bg-white/90 dark:bg-zinc-900/70 border border-white/50 dark:border-zinc-700/70 flex items-center justify-center text-zinc-500 group-hover:scale-105 transition-all">
                       <stat.icon className="w-6 h-6" />
                    </div>
-                   <div className="px-3 py-1 bg-zinc-50 dark:bg-gray-500 rounded-full text-[9px] font-black uppercase tracking-widest text-zinc-400">Audited</div>
+                   <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-white/80 dark:bg-zinc-900/70 ${stat.accent}`}>
+                     {dashboardRange === 1 ? 'Daily' : dashboardRange === 7 ? 'Weekly' : 'Monthly'}
+                   </div>
                 </div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                <p className={`text-2xl font-black tracking-tighter ${stat.color}`}>{stat.val}</p>
-                {stat.label === 'Settled Today' && (
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mt-1">
+                <p className="mt-5 text-[10px] font-black text-zinc-500 dark:text-zinc-300 uppercase tracking-widest">{stat.label}</p>
+                <p className={`mt-1 text-2xl font-black tracking-tight ${stat.color}`}>{stat.val}</p>
+                <p className="mt-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{stat.hint}</p>
+                {stat.label === 'Received' && (
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300 mt-2">
                     Last {dashboardRange} day{dashboardRange > 1 ? 's' : ''}
                   </p>
                 )}

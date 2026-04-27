@@ -413,10 +413,58 @@ export class LeadgerService {
       `,
       [days],
     );
+    const periodSalesRows = await this.dataSource.query(
+      `
+        WITH paid_by_sale AS (
+          SELECT p.sale_id, COALESCE(SUM(p.amount), 0)::numeric AS paid_amount
+          FROM payments p
+          GROUP BY p.sale_id
+        ),
+        sale_totals AS (
+          SELECT
+            s.sale_id,
+            COALESCE(SUM(sl.quantity * sl.unit_price), 0)::numeric AS net_sales,
+            COALESCE(SUM(sl.discount), 0)::numeric AS discount_given
+          FROM sales s
+          LEFT JOIN sale_lines sl ON sl.sale_id = s.sale_id
+          WHERE s.created_at >= NOW() - ($1 || ' days')::interval
+          GROUP BY s.sale_id
+        )
+        SELECT
+          COUNT(st.sale_id)::int AS "salesCount",
+          COALESCE(SUM(st.net_sales + st.discount_given), 0)::numeric AS "grossSales",
+          COALESCE(SUM(st.discount_given), 0)::numeric AS "discountGiven",
+          COALESCE(SUM(st.net_sales), 0)::numeric AS "netSales",
+          COALESCE(SUM(COALESCE(pb.paid_amount, 0)), 0)::numeric AS "receivedAmount",
+          COALESCE(SUM(GREATEST(st.net_sales - COALESCE(pb.paid_amount, 0), 0)), 0)::numeric AS "ledgerDue"
+        FROM sale_totals st
+        LEFT JOIN paid_by_sale pb ON pb.sale_id = st.sale_id
+      `,
+      [days],
+    );
+    const paymentBreakdownRows = await this.dataSource.query(
+      `
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN LOWER(COALESCE(p.payment_method::text, '')) IN ('cash')
+            THEN p.amount ELSE 0 END), 0)::numeric AS "cashReceived",
+          COALESCE(SUM(CASE
+            WHEN LOWER(COALESCE(p.payment_method::text, '')) IN ('bank_transfer', 'upi', 'card', 'cheque', 'online')
+            THEN p.amount ELSE 0 END), 0)::numeric AS "onlineReceived"
+        FROM payments p
+        WHERE p.created_at >= NOW() - ($1 || ' days')::interval
+      `,
+      [days],
+    );
     const totals = totalsRows?.[0] || {};
+    const periodSales = periodSalesRows?.[0] || {};
+    const paymentBreakdown = paymentBreakdownRows?.[0] || {};
     const totalCustomers = Number(totals.totalCustomers || 0);
     const payableCustomers = Number(totals.payableCustomers || 0);
     const riskFactorPct = totalCustomers > 0 ? (payableCustomers / totalCustomers) * 100 : 0;
+    const cashReceived = Number(paymentBreakdown.cashReceived || 0);
+    const onlineReceived = Number(paymentBreakdown.onlineReceived || 0);
+    const ledgerDue = Number(periodSales.ledgerDue || 0);
 
     return {
       totalReceivables: Number(totals.totalReceivables || 0),
@@ -426,6 +474,18 @@ export class LeadgerService {
         percentage: Number(riskFactorPct.toFixed(2)),
       },
       periodDays: Number(days),
+      periodSummary: {
+        salesCount: Number(periodSales.salesCount || 0),
+        grossSales: Number(periodSales.grossSales || 0),
+        discountGiven: Number(periodSales.discountGiven || 0),
+        netSales: Number(periodSales.netSales || 0),
+        receivedAmount: Number(periodSales.receivedAmount || 0),
+        ledgerDue,
+        cashReceived,
+        onlineReceived,
+        expectedCashInHand: cashReceived,
+        expectedAccountBalance: onlineReceived,
+      },
       totals: {
         totalCustomers,
         payableCustomers,
