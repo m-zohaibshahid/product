@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsNumberString, Max, Min } from 'class-validator';
 
 export class ListReturnsDto {
   @IsOptional()
@@ -16,15 +16,15 @@ export class ListReturnsDto {
   limit?: number = 20;
 
   @IsOptional()
-  @IsUUID()
+  @IsNumberString()
   sale_id?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsNumberString()
   customer_id?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsNumberString()
   variant_id?: string;
 
   @IsOptional()

@@ -51,6 +51,7 @@ export const inventoryApi = createApi({
     'KhataTransactions',
     'KhataDashboard',
     'KhataHistory',
+    'Returns',
   ],
   endpoints: (builder) => ({
     getDashboard: builder.query<Record<string, unknown>, void>({
@@ -148,6 +149,18 @@ export const inventoryApi = createApi({
       query: (payload) => ({ url: '/selling/process', method: 'POST', body: payload }),
       invalidatesTags: ['StockReport', 'Variants', 'InventoryDashboard', 'InventoryAlerts', 'Movements'],
     }),
+    getReturns: builder.query<Record<string, unknown>[], Record<string, unknown> | void>({
+      query: (params) => ({ url: '/selling/returns', params: params ?? { page: 1, limit: 50 } }),
+      transformResponse: (response: { data?: Record<string, unknown>[] }) => response?.data ?? [],
+      providesTags: ['Returns'],
+    }),
+    processReturn: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
+      query: (payload) => ({ url: '/selling/returns/process', method: 'POST', body: payload }),
+      invalidatesTags: ['Returns', 'Variants', 'StockReport', 'InventoryDashboard', 'KhataDashboard', 'KhataTransactions'],
+    }),
+    validateReturn: builder.mutation<Record<string, unknown>, Record<string, unknown>>({
+      query: (payload) => ({ url: '/selling/returns/validate', method: 'POST', body: payload }),
+    }),
     getKhataDashboard: builder.query<Record<string, unknown>, { days?: number } | void>({
       query: (params) => ({ url: '/leadger/dashboard', params: params ?? { days: 30 } }),
       providesTags: ['KhataDashboard'],
@@ -204,6 +217,9 @@ export const {
   useArchiveVariantMutation,
   useRestoreVariantMutation,
   useProcessSaleMutation,
+  useGetReturnsQuery,
+  useProcessReturnMutation,
+  useValidateReturnMutation,
   useGetKhataDashboardQuery,
   useGetKhataCustomersQuery,
   useGetKhataCustomerDetailQuery,

@@ -1,13 +1,13 @@
-import { IsUUID, IsInt, IsOptional, IsString, IsNotEmpty, IsArray, ValidateNested, Min, IsNumber } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsNotEmpty, IsArray, ValidateNested, Min, IsNumber, IsNumberString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ReturnItemDto {
-  @IsUUID()
+  @IsNumberString()
   @IsNotEmpty()
   variant_id: string;
 
-  @IsUUID()
-  @IsNotEmpty()
+  @IsNumberString()
+  @IsOptional()
   location_id: string;
 
   @IsInt()
@@ -21,11 +21,11 @@ export class ReturnItemDto {
 }
 
 export class ProcessReturnDto {
-  @IsUUID()
+  @IsNumberString()
   @IsOptional()
   sale_id?: string;
 
-  @IsUUID()
+  @IsNumberString()
   @IsNotEmpty()
   customer_id: string;
 

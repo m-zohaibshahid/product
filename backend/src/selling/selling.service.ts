@@ -333,50 +333,159 @@ export class SellingService {
     }));
   }
 
+  private async ensureReturnEntriesTable(manager: EntityManager) {
+    await manager.query(`
+      CREATE TABLE IF NOT EXISTS return_entries (
+        return_id SERIAL PRIMARY KEY,
+        sale_id INTEGER NULL,
+        customer_id INTEGER NULL,
+        variant_id INTEGER NOT NULL,
+        location_id INTEGER NULL,
+        return_quantity NUMERIC(12, 2) NOT NULL,
+        refund_unit_price NUMERIC(12, 2) NOT NULL,
+        refund_amount NUMERIC(12, 2) NOT NULL,
+        protocol VARCHAR(20) NOT NULL DEFAULT 'REFUND',
+        remarks TEXT NULL,
+        created_by INTEGER NULL,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+  }
+
   async processReturn(dto: ProcessReturnDto, userId?: string) {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
+      await this.ensureReturnEntriesTable(manager);
       let totalRefundAmount = 0;
+      const numericSaleId = dto.sale_id ? Number(dto.sale_id) : null;
+      const numericCustomerId = Number(dto.customer_id);
+      const numericUserId = Number(userId);
+      const createdBy = Number.isFinite(numericUserId) && numericUserId > 0
+        ? numericUserId
+        : Number((await manager.query(`SELECT user_id FROM users ORDER BY user_id ASC LIMIT 1`))?.[0]?.user_id || 0);
 
-      for (const itemDto of dto.items) {
-        const variant = await manager.findOne(Variant, {
-          where: { id: itemDto.variant_id },
-          lock: { mode: 'pessimistic_write' },
-        });
-
-        if (!variant) throw new NotFoundException(`Variant ${itemDto.variant_id} not found`);
-
-        // 1. Stock Ledger Entry (Add back stock)
-        const lastEntry = await manager.findOne(StockLedger, {
-          where: { variant_id: itemDto.variant_id, location_id: itemDto.location_id },
-          order: { createdAt: 'DESC' },
-        });
-
-        const currentBalance = lastEntry ? Number(lastEntry.current_balance) : 0;
-        const newBalance = currentBalance + itemDto.quantity;
-
-        const ledgerEntry = manager.create(StockLedger, {
-          variant_id: itemDto.variant_id,
-          location_id: itemDto.location_id,
-          quantity: itemDto.quantity,
-          current_balance: newBalance,
-          movement_type: StockMovementType.RETURN,
-          remarks: dto.remarks || `Returned from Sale: ${dto.sale_id || 'N/A'}`,
-          reference_id: dto.sale_id,
-          created_by: userId,
-        });
-        await manager.save(ledgerEntry);
-
-        // 2. Update Variant Cache
-        variant.stock = (variant.stock || 0) + itemDto.quantity;
-        await manager.save(variant);
-
-        totalRefundAmount += (itemDto.refund_unit_price * itemDto.quantity);
+      if (!Number.isFinite(numericCustomerId) || numericCustomerId <= 0) {
+        throw new BadRequestException('Invalid customer_id for return processing.');
       }
 
-      // 3. Khata Integration (Credit the customer)
+      if (numericSaleId) {
+        const saleRows = await manager.query(
+          `SELECT sale_id, customer_id FROM sales WHERE sale_id = $1 LIMIT 1`,
+          [numericSaleId],
+        );
+        const sale = saleRows?.[0];
+        if (!sale) throw new NotFoundException(`Sale ${dto.sale_id} not found`);
+        if (Number(sale.customer_id || 0) !== numericCustomerId) {
+          throw new BadRequestException('customer_id does not match sale customer.');
+        }
+      }
+
+      for (const itemDto of dto.items) {
+        const variantId = Number(itemDto.variant_id);
+        const locationId = itemDto.location_id ? Number(itemDto.location_id) : null;
+        const qty = Number(itemDto.quantity || 0);
+        const refundUnitPrice = Number(itemDto.refund_unit_price || 0);
+        if (!Number.isFinite(variantId) || variantId <= 0) {
+          throw new BadRequestException(`Invalid variant_id ${itemDto.variant_id}`);
+        }
+        if (!Number.isFinite(qty) || qty <= 0) {
+          throw new BadRequestException(`Invalid return quantity for variant ${itemDto.variant_id}`);
+        }
+
+        const variantRows = await manager.query(
+          `SELECT variant_id FROM product_variants WHERE variant_id = $1 LIMIT 1`,
+          [variantId],
+        );
+        if (!variantRows?.length) {
+          throw new NotFoundException(`Variant ${variantId} not found`);
+        }
+
+        if (numericSaleId) {
+          const soldRows = await manager.query(
+            `
+              SELECT COALESCE(SUM(quantity), 0)::numeric AS sold_qty
+              FROM sale_lines
+              WHERE sale_id = $1 AND variant_id = $2
+            `,
+            [numericSaleId, variantId],
+          );
+          const soldQty = Number(soldRows?.[0]?.sold_qty || 0);
+          const returnedRows = await manager.query(
+            `
+              SELECT COALESCE(SUM(return_quantity), 0)::numeric AS returned_qty
+              FROM return_entries
+              WHERE sale_id = $1 AND variant_id = $2
+            `,
+            [numericSaleId, variantId],
+          );
+          const returnedQty = Number(returnedRows?.[0]?.returned_qty || 0);
+          const availableToReturn = soldQty - returnedQty;
+          if (qty > availableToReturn) {
+            throw new BadRequestException(
+              `Return quantity ${qty} exceeds returnable ${availableToReturn} for variant ${variantId}.`,
+            );
+          }
+        }
+
+        // Add back stock to location row if present, else only update variant cache.
+        if (locationId && Number.isFinite(locationId)) {
+          const updated = await manager.query(
+            `
+              UPDATE stock
+              SET quantity_on_hand = COALESCE(quantity_on_hand, 0) + $1, last_updated_at = NOW()
+              WHERE variant_id = $2 AND location_id = $3
+              RETURNING stock_id
+            `,
+            [qty, variantId, locationId],
+          );
+          if (!updated?.length) {
+            await manager.query(
+              `
+                INSERT INTO stock (variant_id, location_id, quantity_on_hand, last_updated_at)
+                VALUES ($1, $2, $3, NOW())
+              `,
+              [variantId, locationId, qty],
+            );
+          }
+        }
+
+        await manager.query(
+          `
+            UPDATE product_variants
+            SET min_stock_level = COALESCE(min_stock_level, 0) + $1, updated_at = NOW()
+            WHERE variant_id = $2
+          `,
+          [qty, variantId],
+        );
+
+        const itemRefundAmount = Number((refundUnitPrice * qty).toFixed(2));
+        totalRefundAmount += itemRefundAmount;
+
+        await manager.query(
+          `
+            INSERT INTO return_entries (
+              sale_id, customer_id, variant_id, location_id, return_quantity,
+              refund_unit_price, refund_amount, protocol, remarks, created_by
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          `,
+          [
+            numericSaleId,
+            numericCustomerId,
+            variantId,
+            locationId,
+            qty,
+            refundUnitPrice,
+            itemRefundAmount,
+            'REFUND',
+            dto.remarks || `Return processed for sale ${dto.sale_id || 'N/A'}`,
+            createdBy || null,
+          ],
+        );
+      }
+
       if (dto.customer_id) {
         await this.leadgerService.addKhataEntry(manager, dto.customer_id, totalRefundAmount, TransactionType.CREDIT, {
-          saleId: dto.sale_id,
+          saleId: dto.sale_id || undefined,
           remarks: `Return Processing: ${dto.remarks || 'No remarks'}`,
           userId,
         });
@@ -393,51 +502,70 @@ export class SellingService {
   async listReturns(query: ListReturnsDto = {}) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const qb = this.stockLedgerRepo
-      .createQueryBuilder('l')
-      .leftJoinAndSelect('l.variant', 'variant')
-      .where('l.movement_type = :movementType', { movementType: StockMovementType.RETURN });
-
-    if (query.sale_id) {
-      qb.andWhere('l.reference_id = :saleId', { saleId: query.sale_id });
-    }
-    if (query.variant_id) {
-      qb.andWhere('l.variant_id = :variantId', { variantId: query.variant_id });
-    }
-    if (query.from) {
-      qb.andWhere('l.createdAt >= :from', { from: query.from });
-    }
-    if (query.to) {
-      qb.andWhere('l.createdAt <= :to', { to: query.to });
-    }
-
-    qb.orderBy('l.createdAt', 'DESC').offset((page - 1) * limit).limit(limit);
-    const [rows, total] = await qb.getManyAndCount();
-
-    const saleIds = Array.from(new Set(rows.map((row) => row.reference_id).filter(Boolean)));
-    const sales = saleIds.length
-      ? await this.saleRepo.findBy(saleIds.map((id) => ({ id })))
-      : [];
-    const saleMap = new Map(sales.map((sale) => [sale.id, sale]));
-
-    const data = rows
-      .filter((row) => !query.customer_id || saleMap.get(row.reference_id)?.customer_id === query.customer_id)
-      .map((row) => {
-        const linkedSale = row.reference_id ? saleMap.get(row.reference_id) : null;
-        return {
-          id: row.id,
-          sale_id: row.reference_id || null,
-          customer_id: linkedSale?.customer_id || null,
-          customer_name: linkedSale?.customer_name || null,
-          variant_id: row.variant_id,
-          variant_sku: row.variant?.sku || null,
-          location_id: row.location_id,
-          return_quantity: Number(row.quantity || 0),
-          stock_balance_after: Number(row.current_balance || 0),
-          remarks: row.remarks,
-          createdAt: row.createdAt,
-        };
-      });
+    await this.ensureReturnEntriesTable(this.dataSource.manager);
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          re.return_id::text AS id,
+          re.sale_id::text AS sale_id,
+          re.customer_id::text AS customer_id,
+          c.name AS customer_name,
+          re.variant_id::text AS variant_id,
+          pv.sku AS variant_sku,
+          re.location_id::text AS location_id,
+          re.return_quantity::numeric AS return_quantity,
+          re.refund_amount::numeric AS refund_amount,
+          re.protocol,
+          re.remarks,
+          re.created_at AS "createdAt"
+        FROM return_entries re
+        LEFT JOIN customers c ON c.customer_id = re.customer_id
+        LEFT JOIN product_variants pv ON pv.variant_id = re.variant_id
+        WHERE ($1::text = '' OR re.sale_id::text = $1)
+          AND ($2::text = '' OR re.customer_id::text = $2)
+          AND ($3::text = '' OR re.variant_id::text = $3)
+          AND ($4::text = '' OR re.created_at::date >= $4::date)
+          AND ($5::text = '' OR re.created_at::date <= $5::date)
+        ORDER BY re.created_at DESC, re.return_id DESC
+        LIMIT $6 OFFSET $7
+      `,
+      [
+        query.sale_id ?? '',
+        query.customer_id ?? '',
+        query.variant_id ?? '',
+        query.from ?? '',
+        query.to ?? '',
+        Number(limit),
+        Number((page - 1) * limit),
+      ],
+    );
+    const totalRows = await this.dataSource.query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM return_entries re
+        WHERE ($1::text = '' OR re.sale_id::text = $1)
+          AND ($2::text = '' OR re.customer_id::text = $2)
+          AND ($3::text = '' OR re.variant_id::text = $3)
+          AND ($4::text = '' OR re.created_at::date >= $4::date)
+          AND ($5::text = '' OR re.created_at::date <= $5::date)
+      `,
+      [query.sale_id ?? '', query.customer_id ?? '', query.variant_id ?? '', query.from ?? '', query.to ?? ''],
+    );
+    const total = Number(totalRows?.[0]?.total || 0);
+    const data = rows.map((row: any) => ({
+      id: row.id,
+      sale_id: row.sale_id || null,
+      customer_id: row.customer_id || null,
+      customer_name: row.customer_name || null,
+      variant_id: row.variant_id,
+      variant_sku: row.variant_sku || null,
+      location_id: row.location_id || null,
+      return_quantity: Number(row.return_quantity || 0),
+      refund_amount: Number(row.refund_amount || 0),
+      protocol: row.protocol || 'REFUND',
+      remarks: row.remarks || null,
+      createdAt: row.createdAt,
+    }));
 
     return {
       success: true,
@@ -445,40 +573,65 @@ export class SellingService {
       pagination: {
         page,
         limit,
-        total: query.customer_id ? data.length : total,
-        totalPages: Math.ceil((query.customer_id ? data.length : total) / limit) || 1,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     };
   }
 
   async getReturnDetail(id: string) {
-    const entry = await this.stockLedgerRepo.findOne({
-      where: { id, movement_type: StockMovementType.RETURN },
-      relations: ['variant', 'location'],
-    });
-    if (!entry) {
-      throw new NotFoundException('Return entry not found');
-    }
+    await this.ensureReturnEntriesTable(this.dataSource.manager);
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          re.return_id::text AS id,
+          re.sale_id::text AS sale_id,
+          re.customer_id::text AS customer_id,
+          c.name AS customer_name,
+          re.variant_id::text AS variant_id,
+          pv.sku AS variant_sku,
+          re.location_id::text AS location_id,
+          re.return_quantity::numeric AS return_quantity,
+          re.refund_unit_price::numeric AS refund_unit_price,
+          re.refund_amount::numeric AS refund_amount,
+          re.protocol,
+          re.remarks,
+          re.created_at AS "createdAt"
+        FROM return_entries re
+        LEFT JOIN customers c ON c.customer_id = re.customer_id
+        LEFT JOIN product_variants pv ON pv.variant_id = re.variant_id
+        WHERE re.return_id::text = $1
+        LIMIT 1
+      `,
+      [id],
+    );
+    const entry = rows?.[0];
+    if (!entry) throw new NotFoundException('Return entry not found');
 
-    const linkedSale = entry.reference_id
-      ? await this.saleRepo.findOne({
-          where: { id: entry.reference_id },
-          relations: ['items'],
-        })
-      : null;
+    const saleRows = entry.sale_id
+      ? await this.dataSource.query(
+          `
+            SELECT sale_id::text AS id, customer_id::text AS customer_id, total_amount, payment_status, created_at AS "createdAt"
+            FROM sales WHERE sale_id = $1 LIMIT 1
+          `,
+          [Number(entry.sale_id)],
+        )
+      : [];
+    const linkedSale = saleRows?.[0] || null;
 
     return {
       success: true,
       data: {
         return_entry: {
           id: entry.id,
-          sale_id: entry.reference_id || null,
+          sale_id: entry.sale_id || null,
           variant_id: entry.variant_id,
-          variant_sku: entry.variant?.sku || null,
+          variant_sku: entry.variant_sku || null,
           location_id: entry.location_id,
-          location_name: entry.location?.name || null,
-          return_quantity: Number(entry.quantity || 0),
-          stock_balance_after: Number(entry.current_balance || 0),
+          return_quantity: Number(entry.return_quantity || 0),
+          refund_unit_price: Number(entry.refund_unit_price || 0),
+          refund_amount: Number(entry.refund_amount || 0),
+          protocol: entry.protocol || 'REFUND',
           remarks: entry.remarks,
           createdAt: entry.createdAt,
         },
@@ -486,17 +639,12 @@ export class SellingService {
           ? {
               id: linkedSale.id,
               customer_id: linkedSale.customer_id,
-              customer_name: linkedSale.customer_name,
+              customer_name: entry.customer_name || null,
               total_amount: Number(linkedSale.total_amount || 0),
-              payment_mode: linkedSale.payment_mode,
+              payment_status: linkedSale.payment_status,
               createdAt: linkedSale.createdAt,
             }
           : null,
-        stock_impact: {
-          movement_type: entry.movement_type,
-          quantity_added_back: Number(entry.quantity || 0),
-          new_location_balance: Number(entry.current_balance || 0),
-        },
       },
     };
   }
@@ -506,13 +654,13 @@ export class SellingService {
       throw new BadRequestException('sale_id is required for return validation');
     }
 
-    const sale = await this.saleRepo.findOne({
-      where: { id: dto.sale_id },
-      relations: ['items'],
-    });
-    if (!sale) {
-      throw new NotFoundException('Sale not found');
-    }
+    await this.ensureReturnEntriesTable(this.dataSource.manager);
+    const saleRows = await this.dataSource.query(
+      `SELECT sale_id::text AS id, customer_id::text AS customer_id, created_at AS "createdAt" FROM sales WHERE sale_id = $1 LIMIT 1`,
+      [Number(dto.sale_id)],
+    );
+    const sale = saleRows?.[0];
+    if (!sale) throw new NotFoundException('Sale not found');
 
     const returnWindowDays = dto.return_window_days ?? 30;
     const saleAgeDays = Math.floor(
@@ -530,7 +678,7 @@ export class SellingService {
 
     const returnableByItem: Array<{
       variant_id: string;
-      location_id: string;
+      location_id: string | null;
       sold_qty: number;
       returned_qty: number;
       available_to_return: number;
@@ -540,14 +688,19 @@ export class SellingService {
     }> = [];
 
     for (const item of dto.items) {
-      const soldItem = sale.items.find(
-        (saleItem) =>
-          saleItem.variant_id === item.variant_id && saleItem.location_id === item.location_id,
+      const soldRows = await this.dataSource.query(
+        `
+          SELECT COALESCE(SUM(quantity), 0)::numeric AS sold_qty
+          FROM sale_lines
+          WHERE sale_id = $1 AND variant_id = $2
+        `,
+        [Number(dto.sale_id), Number(item.variant_id)],
       );
-      if (!soldItem) {
+      const soldQty = Number(soldRows?.[0]?.sold_qty || 0);
+      if (soldQty <= 0) {
         returnableByItem.push({
           variant_id: item.variant_id,
-          location_id: item.location_id,
+          location_id: item.location_id || null,
           sold_qty: 0,
           returned_qty: 0,
           available_to_return: 0,
@@ -559,17 +712,15 @@ export class SellingService {
         continue;
       }
 
-      const returnedRaw = await this.stockLedgerRepo
-        .createQueryBuilder('l')
-        .select('COALESCE(SUM(l.quantity), 0)', 'totalReturned')
-        .where('l.movement_type = :movementType', { movementType: StockMovementType.RETURN })
-        .andWhere('l.reference_id = :saleId', { saleId: dto.sale_id })
-        .andWhere('l.variant_id = :variantId', { variantId: item.variant_id })
-        .andWhere('l.location_id = :locationId', { locationId: item.location_id })
-        .getRawOne();
-
-      const soldQty = Number(soldItem.quantity || 0);
-      const returnedQty = Number(returnedRaw?.totalReturned || 0);
+      const returnedRows = await this.dataSource.query(
+        `
+          SELECT COALESCE(SUM(return_quantity), 0)::numeric AS returned_qty
+          FROM return_entries
+          WHERE sale_id = $1 AND variant_id = $2
+        `,
+        [Number(dto.sale_id), Number(item.variant_id)],
+      );
+      const returnedQty = Number(returnedRows?.[0]?.returned_qty || 0);
       const available = soldQty - returnedQty;
       const requested = Number(item.quantity || 0);
       const valid = requested <= available;
@@ -582,7 +733,7 @@ export class SellingService {
 
       returnableByItem.push({
         variant_id: item.variant_id,
-        location_id: item.location_id,
+        location_id: item.location_id || null,
         sold_qty: soldQty,
         returned_qty: returnedQty,
         available_to_return: available,
