@@ -1,62 +1,99 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #002d5d;
+  --color-primary-container: #004385;
+  --color-secondary: #7c5071;
+  --color-secondary-container: #fec7ed;
+  --color-tertiary: #3d2539;
+  --color-surface: #fbf9f8;
+  --color-on-surface: #1b1c1c;
+  --color-on-surface-variant: #424750;
+  --color-outline: #737782;
+  --color-outline-variant: #c3c6d2;
+  --color-error: #ba1a1a;
+  --color-card-dark: #bab7b1;
+  --color-navbar-dark: #bab7b1;
+  
+  /* Custom Animations */
+  --animate-fade-in: fadeIn 0.5s ease-in-out;
+  --animate-slide-in: slideIn 0.3s ease-out;
+  --animate-toast-in: toastIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes toastIn {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --font-inter: 'Inter', sans-serif;
+  --background: #fbf9f8;
+  --foreground: #1b1c1c;
+  --card-bg: #d4d4d8; /* light gray (zinc-300) equivalent */
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Force class-based dark mode support in Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --background: #1F2E4D;
+  --foreground: #f4f4f5;
+  --card-bg: #bab7b1;
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+.dark * {
+  font-family: 'Inter', sans-serif !important;
+  font-style: normal !important;
+}
+
+@layer base {
+  * {
+    border-color: transparent;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition-property: background-color, color;
+    transition-duration: 300ms;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
-}
-
-/* Custom utility classes */
 @layer utilities {
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  .text-editorial {
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+  
+  .glass {
+    background: rgba(251, 249, 248, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+  .italic-elegant {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
   }
 
-  .card {
-    @apply rounded-lg bg-white p-6 shadow-sm border border-gray-200 transition-shadow hover:shadow-md;
+  .ambient-shadow {
+    box-shadow: 0 12px 32px rgba(27, 28, 28, 0.06);
   }
-
-  .input {
-    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors;
-  }
-
-  .table {
-    @apply w-full;
-  }
-
-  .table th {
-    @apply px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-700 bg-gray-50;
-  }
-
-  .table td {
-    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
-  }
-
-  .table tr {
-    @apply hover:bg-gray-50 transition-colors;
+  
+  .ghost-border {
+    border: 1px solid rgba(195, 198, 210, 0.15);
   }
 }
